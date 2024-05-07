@@ -29,8 +29,8 @@ jobs:
       - name: Build macOS
         run: flutter build macos
 
-      - name: Upload Artifacts
+      - name: Upload Artifact
         uses: actions/upload-artifact@v2
         with:
-          name: macOS-App
+          name: mac-build-${{ github.run_number }}
           path: build/macos/Build/Products/Release/*.app
