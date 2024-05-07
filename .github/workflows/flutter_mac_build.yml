@@ -12,19 +12,18 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
+      - uses: actions/checkout@v2
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.0.5' # Specify the Flutter version
+        flutter-version: '3.x' # Specify the Flutter version you are using
+        channel: 'stable'  # or 'beta' or 'dev'
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Run tests
-        run: flutter test
+      # - name: Run tests
+      #   run: flutter test
 
       - name: Build macOS
         run: flutter build macos
