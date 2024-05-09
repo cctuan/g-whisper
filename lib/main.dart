@@ -6,12 +6,16 @@ import 'package:tray_manager/tray_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:window_manager/window_manager.dart';
+import './settingsPage.dart';
 import './recordService.dart';
+import './PromptItem.dart';
 
 GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
   await hotKeyManager.unregisterAll();
   runApp(const MyApp(title: 'G Whisper'));
   // await hotKeyManager.unregisterAll();
@@ -42,13 +46,15 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
       });
     };
     _recorderService.init();
-    _recorderService.onRecordCompleteReturn = (text) {
+    _recorderService.onRecordCompleteReturn =
+        (RecordResult result, [int? index]) {
       // 在这里处理录音完成后的逻辑
       setState(() {
-        // 假设 _recordedFilePath 是录音文件的路径
-        // if (text != null) {
-        recordLogs.insert(0, text);
-        // }
+        if (index != null && index >= 0 && index < recordLogs.length) {
+          recordLogs[index] = result; // Replace the existing entry at the index
+        } else {
+          recordLogs.insert(0, result); // Insert new record at the beginning
+        }
       });
     };
     _recorderService.onAmplitudeChange = (bool voicePresent) {
@@ -108,6 +114,13 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
     if (menuItem.key == 'show_settings') {
+      WindowOptions windowOptions = WindowOptions(
+        center: true,
+      );
+      windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
       showSettingsDialog();
     } else if (menuItem.key == 'close_app') {
       // closeApplication();
@@ -148,95 +161,21 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   }
 
   Future<void> showSettingsDialog() async {
-    BuildContext context = navigatorKey.currentState!.overlay!.context;
-    if (isSettingsDialogOpen) {
-      return; // If the dialog is already open, do nothing
+    if (navigatorKey.currentState == null) return;
+
+    var currentRoute = ModalRoute.of(navigatorKey.currentContext!);
+
+    if (currentRoute != null &&
+        currentRoute.settings.name == SettingsPage.routeName) {
+      // 如果当前顶部已是 SettingsPage，则不执行任何操作
+      return;
     }
-    isSettingsDialogOpen = true; // Set flag to true as dialog is opening
 
-    Map<String, String> settings = await loadSettings();
-    TextEditingController openAiKeyController =
-        TextEditingController(text: settings['openai_key']);
-    TextEditingController promptController =
-        TextEditingController(text: settings['prompt']);
-
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false, // User must tap button!
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('OpenAI Settings'),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                TextField(
-                  controller: openAiKeyController,
-                  decoration: InputDecoration(
-                    hintText: "Enter OpenAI Key",
-                    border:
-                        OutlineInputBorder(), // Standard border when not focused
-                    enabledBorder: OutlineInputBorder(
-                      // Border style when TextField is enabled but not focused
-                      borderSide:
-                          BorderSide(color: Colors.grey[400]!, width: 0.5),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      // Border style when TextField is focused
-                      borderSide:
-                          BorderSide(color: Colors.grey[600]!, width: 1.0),
-                    ),
-                    prefixIcon: Icon(
-                        Icons.vpn_key), // Icon to indicate purpose of the field
-                  ),
-                ),
-                TextField(
-                  controller: promptController,
-                  decoration: InputDecoration(
-                    hintText: "Enter Prompt",
-                    border: OutlineInputBorder(),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide:
-                          BorderSide(color: Colors.grey[400]!, width: 0.5),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide:
-                          BorderSide(color: Colors.grey[600]!, width: 1.0),
-                    ),
-                    prefixIcon:
-                        Icon(Icons.text_fields), // Icon to suggest text input
-                  ),
-                  keyboardType: TextInputType.multiline,
-                  maxLines: null,
-                  minLines: 3,
-                  cursorColor: Colors.grey[800], // Make the cursor more visible
-                  cursorWidth:
-                      2.0, // Increase the width of the cursor for better visibility
-                )
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: const Text('Save'),
-              onPressed: () {
-                // Save the OpenAI Key and Prompt somewhere
-                // For example, using SharedPreferences or to the state
-                print('OpenAI Key: ${openAiKeyController.text}');
-                print('Prompt: ${promptController.text}');
-                saveSettings(openAiKeyController.text, promptController.text);
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    ).then((_) => isSettingsDialogOpen = false);
+    // 推送 SettingsPage 到 Navigator
+    navigatorKey.currentState!.push(MaterialPageRoute(
+      builder: (context) => const SettingsPage(),
+      settings: RouteSettings(name: SettingsPage.routeName),
+    ));
   }
 
   void deleteRecording(int index) {
@@ -414,44 +353,58 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                         child: ExpansionTile(
                           title: Text('${recordResult.timestamp}'),
                           subtitle: Text(
-                              recordResult.processedText.substring(0, 50) +
-                                  '...'),
+                            recordResult.processedText.length > 50
+                                ? '${recordResult.processedText.substring(0, 50)}...'
+                                : recordResult.processedText,
+                          ),
                           backgroundColor: Colors.grey[200],
                           children: <Widget>[
                             ExpansionTile(
                                 title: const Text(
-                                  '文本內容',
+                                  '細節內容',
                                   style: TextStyle(
                                     fontSize: 20, // 更大的字体尺寸
                                     fontWeight: FontWeight.bold, // 加粗字体
                                   ),
                                 ),
                                 children: <Widget>[
-                                  ListTile(
-                                      title: const Text(
-                                        '原始音檔文字',
+                                  ExpansionTile(
+                                    title: const Text(
+                                      '原始音檔文字',
+                                      style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87),
+                                    ),
+                                    children: <Widget>[
+                                      TextField(
+                                        controller: originalTextController,
+                                        focusNode: originalTextFocusNode,
                                         style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black87),
+                                            color: Colors.black, fontSize: 16),
+                                        cursorColor: Colors.blue,
+                                        decoration: InputDecoration(
+                                          border: InputBorder
+                                              .none, // 无边框，根据需要选择合适的边框样式
+                                        ),
+                                        maxLines: null, // 允许无限行
                                       ),
-                                      subtitle: Column(
-                                        children: <Widget>[
-                                          TextField(
-                                            controller: originalTextController,
-                                            focusNode: originalTextFocusNode,
-                                            style: TextStyle(
-                                                color: Colors.black,
-                                                fontSize: 16),
-                                            cursorColor: Colors.blue,
-                                            decoration: InputDecoration(
-                                              border: InputBorder
-                                                  .none, // 无边框，根据需要选择合适的边框样式
-                                            ),
-                                            maxLines: null, // 允许无限行
-                                          ),
-                                        ],
-                                      )),
+                                    ],
+                                  ),
+                                  buildPromptDropdown(recordResult.promptText,
+                                      _recorderService.getPrompts(),
+                                      (selectedPrompt) {
+                                    setState(() {
+                                      recordResult.promptText =
+                                          selectedPrompt; // Update the current prompt text
+                                      _recorderService.handleExistingPrompt(
+                                          selectedPrompt, recordResult, index);
+                                      // print(selectedPrompt);
+                                      // recordResult.promptText = selectedPrompt;
+                                      // // Optionally trigger processing with the new prompt
+                                      // _recorderService.reprocessRecord(record, selectedPrompt);
+                                    });
+                                  }),
                                   ListTile(
                                     title: const Text(
                                       'AI整理檔案（可編輯）',
@@ -541,4 +494,29 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     hotKeyManager.unregister(_hotKey);
     super.dispose();
   }
+}
+
+Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
+    Function(String) onSelected) {
+  return DropdownButton<String>(
+    value: currentPrompt,
+    onChanged: (newValue) {
+      if (newValue != null && newValue != 'Select a prompt...') {
+        onSelected(newValue);
+      }
+    },
+    items: [
+      DropdownMenuItem<String>(
+        value: 'Select a prompt...', // Default non-selectable item
+        child: Text('Select a prompt...'),
+        enabled: false, // Make it non-selectable
+      ),
+      ...prompts.map((PromptItem prompt) {
+        return DropdownMenuItem<String>(
+          value: prompt.prompt,
+          child: Text(prompt.name),
+        );
+      }).toList(),
+    ],
+  );
 }

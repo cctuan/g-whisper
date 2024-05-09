@@ -8,19 +8,24 @@ import 'package:dart_openai/dart_openai.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'ai.dart';
+import 'customOllama.dart';
 import 'package:whisper/whisper_dart.dart';
 import 'fileManager.dart';
 import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
+import './SettingService.dart';
+import './PromptItem.dart';
 
 class RecordResult {
   String originalText;
   String processedText;
   final String timestamp;
+  String promptText; // Added to store the prompt text itself
 
   RecordResult({
     required this.originalText,
     required this.processedText,
     required this.timestamp,
+    this.promptText = '',
   });
 }
 
@@ -31,12 +36,14 @@ class AudioPart {
   AudioPart(this.file, this.startTime);
 }
 
-typedef RecordCompleteCallback = void Function(RecordResult result);
+typedef RecordCompleteCallback = void Function(RecordResult result,
+    [int? index]);
 typedef RecordAmplitudeChange = void Function(bool haVoice);
 
 class RecorderService {
   Whisper whisper = Whisper();
   final AudioRecorder _recorder = AudioRecorder();
+  final SettingsService settingsService = SettingsService();
   bool _isRecording = false;
   String? _recordedFilePath;
   bool _isProcessing = false;
@@ -44,17 +51,17 @@ class RecorderService {
 
   bool get isRecording => _isRecording;
   String? get recordedFilePath => _recordedFilePath;
-  final openAIService = OpenAIService();
+  final llmService = LlmService();
   final fileManager = FileManager();
   VoidCallback? onRecordingStateChanged;
   RecordCompleteCallback? onRecordCompleteReturn;
   RecordAmplitudeChange? onAmplitudeChange;
-  Map<String, String>? settings;
+  Map<String, dynamic>? settings;
   double thresholdHigh = -39.0; // 高于初始值的百分比
   bool lastVolumeStatus = false;
 
   Future<void> init() async {
-    settings = await loadSettings();
+    settings = await settingsService.loadSettings();
     final hasPermission = await _recorder.hasPermission();
     _recorder
         .onAmplitudeChanged(const Duration(milliseconds: 500))
@@ -77,17 +84,15 @@ class RecorderService {
     }
   }
 
+  // void _updateSettings() async {
+  //   print('Settings updated: $settings');
+  //   settings = await settingsService.loadSettings();
+  //   // Update internal state based on new settings
+  // }
+
   void setProcessing(bool value) {
     _isProcessing = value;
     onRecordingStateChanged?.call(); // Call this to trigger a UI rebuild
-  }
-
-  Future<Map<String, String>> loadSettings() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    String key = prefs.getString('openai_key') ?? '';
-    String prompt = prefs.getString('prompt') ??
-        'Please summarize the following item in zh-hant {topic}';
-    return {'openai_key': key, 'prompt': prompt};
   }
 
   Future<void> toggleRecording() async {
@@ -124,6 +129,7 @@ class RecorderService {
     lastVolumeStatus = false;
     if (path != null) {
       try {
+        settings = await settingsService.loadSettings();
         setProcessing(true);
         final text = await transcribeAudioOpenAi(path);
         handleText(text);
@@ -328,13 +334,66 @@ class RecorderService {
     }
   }
 
+  List<PromptItem> getPrompts() {
+    return settings?['prompts'] ?? [];
+  }
+
+  void handleExistingPrompt(
+      String prompt, RecordResult recordResult, int recordIndex) async {
+    setProcessing(true);
+
+    LlmOptions options = LlmOptions(
+      apiKey: settings?['openai_key'],
+      apiUrl: settings?['ollama_url'],
+      model: settings?['ollama_model'],
+    );
+
+    final result = await llmService.callLlm(prompt ?? '',
+        recordResult.originalText, settings?['use_openai'], options);
+
+    recordResult.processedText = result;
+    setProcessing(false);
+    onRecordCompleteReturn?.call(recordResult, recordIndex);
+  }
+
   void handleText(String content) async {
     if (!isProcessing) {
       return;
     }
-    // Fetching the OpenAI key and prompt from settings, falling back to empty strings if not found.
-    final result = await openAIService.callLlm(
-        settings?['openai_key'] ?? '', settings?['prompt'] ?? '', content);
+    List<PromptItem> prompts = settings?['prompts'] ?? [];
+    if (prompts.isEmpty || settings == null) {
+      print("Settings are not configured properly.");
+      setProcessing(false);
+      return;
+    }
+    if (settings?['use_openai'] && settings?['openai_key'] == null) {
+      print("Settings are not configured properly.");
+      setProcessing(false);
+      return;
+    }
+    if (settings?['use_openai'] == false && settings?['ollama_url'] == null) {
+      print("Settings are not configured properly.");
+      setProcessing(false);
+      return;
+    }
+
+    int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
+    PromptItem selectedPrompt = prompts[defaultPromptIndex];
+
+    String promptTemplate = selectedPrompt.prompt;
+    if (defaultPromptIndex! >= prompts.length) {
+      print("Settings are not configured properly.");
+      setProcessing(false);
+      return;
+    }
+    LlmOptions options = LlmOptions(
+      apiKey: settings?['openai_key'],
+      apiUrl: settings?['ollama_url'],
+      model: settings?['ollama_model'],
+    );
+
+    String result = await llmService.callLlm(
+        promptTemplate ?? '', content, settings?['use_openai'], options);
 
     // Create a date-time stamp
     String formattedDate =
@@ -356,6 +415,7 @@ class RecorderService {
       originalText: content,
       processedText: result,
       timestamp: formattedDate,
+      promptText: promptTemplate,
     );
     setProcessing(false);
     onRecordCompleteReturn?.call(recordResult);

@@ -17,12 +17,16 @@ PODS:
   - record_darwin (1.0.0):
     - Flutter
     - FlutterMacOS
+  - screen_retriever (0.0.1):
+    - FlutterMacOS
   - share_plus (0.0.1):
     - FlutterMacOS
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
   - tray_manager (0.0.1):
+    - FlutterMacOS
+  - window_manager (0.2.0):
     - FlutterMacOS
 
 DEPENDENCIES:
@@ -31,9 +35,11 @@ DEPENDENCIES:
   - hotkey_manager_macos (from `Flutter/ephemeral/.symlinks/plugins/hotkey_manager_macos/macos`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
   - record_darwin (from `Flutter/ephemeral/.symlinks/plugins/record_darwin/macos`)
+  - screen_retriever (from `Flutter/ephemeral/.symlinks/plugins/screen_retriever/macos`)
   - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
   - shared_preferences_foundation (from `Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin`)
   - tray_manager (from `Flutter/ephemeral/.symlinks/plugins/tray_manager/macos`)
+  - window_manager (from `Flutter/ephemeral/.symlinks/plugins/window_manager/macos`)
 
 SPEC REPOS:
   trunk:
@@ -51,12 +57,16 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin
   record_darwin:
     :path: Flutter/ephemeral/.symlinks/plugins/record_darwin/macos
+  screen_retriever:
+    :path: Flutter/ephemeral/.symlinks/plugins/screen_retriever/macos
   share_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/share_plus/macos
   shared_preferences_foundation:
     :path: Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin
   tray_manager:
     :path: Flutter/ephemeral/.symlinks/plugins/tray_manager/macos
+  window_manager:
+    :path: Flutter/ephemeral/.symlinks/plugins/window_manager/macos
 
 SPEC CHECKSUMS:
   ffmpeg-kit-macos-https: 60de703db964ccca7fd0d4d1611f4c102a8139cc
@@ -66,9 +76,11 @@ SPEC CHECKSUMS:
   hotkey_manager_macos: 1e2edb0c7ae4fe67108af44a9d3445de41404160
   path_provider_foundation: 3784922295ac71e43754bd15e0653ccfd36a147c
   record_darwin: 1f6619f2abac4d1ca91d3eeab038c980d76f1517
+  screen_retriever: 59634572a57080243dd1bf715e55b6c54f241a38
   share_plus: 36537c04ce0c3e3f5bd297ce4318b6d5ee5fd6cf
   shared_preferences_foundation: b4c3b4cddf1c21f02770737f147a3f5da9d39695
   tray_manager: 9064e219c56d75c476e46b9a21182087930baf90
+  window_manager: 3a1844359a6295ab1e47659b1a777e36773cd6e8
 
 PODFILE CHECKSUM: 4062a5d7621e35b4f677b9e411c2714a4f99d4c2
 
