@@ -12,6 +12,8 @@ import './recordService.dart';
 import './PromptItem.dart';
 
 GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -178,6 +180,19 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     ));
   }
 
+  void copyRecording(RecordResult recordResult) {
+    final String content =
+        "Recording on ${recordResult.timestamp}:\nOriginal Text: ${recordResult.originalText}\nProcessed Text: ${recordResult.processedText}";
+    Clipboard.setData(ClipboardData(text: content)).then((_) {
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text('Recording copied to clipboard!')),
+      );
+    }).catchError((error) {
+      // Handle any errors here
+      print('Error copying to clipboard: $error');
+    });
+  }
+
   void deleteRecording(int index) {
     setState(() {
       recordLogs.removeAt(index);
@@ -247,6 +262,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
           primarySwatch: Colors.blue,
           useMaterial3: true,
         ),
+        scaffoldMessengerKey: _scaffoldMessengerKey,
         home: Scaffold(
           appBar: AppBar(
             title: Text(widget.title),
@@ -464,6 +480,12 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                   onPressed: () {
                                     // 分享操作
                                     shareRecording(recordResult);
+                                  },
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.content_copy),
+                                  onPressed: () {
+                                    copyRecording(recordResult);
                                   },
                                 ),
                                 IconButton(

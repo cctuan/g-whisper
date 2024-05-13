@@ -14,35 +14,40 @@ class LlmService {
 
   Future<String> callLlm(
       String prompt, String content, bool useOpenAi, LlmOptions config) async {
-    print('prompt $prompt \n content $content');
+    const textSplitter =
+        RecursiveCharacterTextSplitter(chunkSize: 3000, chunkOverlap: 200);
+    final texts = textSplitter.splitText(content);
+    final docs = textSplitter.createDocuments(texts);
+    // print('prompt $prompt \n content $content');
     if (useOpenAi) {
       return await callOpenAI(
-          config.apiKey ?? '', config.model ?? '', prompt, content);
+          config.apiKey ?? '', config.model ?? '', prompt, docs);
     } else {
       return await callOllama(
-          config.apiUrl ?? '', config.model ?? 'llama3', prompt, content);
+          config.apiUrl ?? '', config.model ?? 'llama3', prompt, docs);
     }
   }
 
   Future<String> callOpenAI(
-      String apiKey, String model, String prompt, String topic) async {
-    print('prompt $prompt \n content $topic');
+      String apiKey, String model, String prompt, List<Document> docs) async {
+    // print('prompt $prompt \n content $topic');
     ChatPromptTemplate promptTemplate = ChatPromptTemplate.fromTemplate(
       prompt,
     );
     ChatOpenAI model = ChatOpenAI(apiKey: apiKey);
-    StringOutputParser<ChatResult> outputParser =
-        StringOutputParser<ChatResult>();
 
-    RunnableSequence<Map<String, dynamic>, String> chain =
-        promptTemplate.pipe(model).pipe(outputParser);
-    final result = await chain.invoke({'topic': topic});
+    final summarizeChain =
+        SummarizeChain.stuff(llm: model, promptTemplate: promptTemplate);
+
+    // RunnableSequence<Map<String, dynamic>, String> chain =
+    //     promptTemplate.pipe(model).pipe(outputParser);
+
+    final result = await summarizeChain.run(docs);
     return result;
   }
 
   Future<String> callOllama(
-      String apiUrl, String model, String prompt, String topic) async {
-    print('prompt $prompt \n content $topic');
+      String apiUrl, String model, String prompt, List<Document> docs) async {
     ChatPromptTemplate promptTemplate = ChatPromptTemplate.fromTemplate(
       prompt,
     );
@@ -52,10 +57,10 @@ class LlmService {
         model: 'llama3',
       ),
     );
-    RunnableSequence<Map<String, dynamic>, String> chain =
-        promptTemplate.pipe(llm).pipe(StringOutputParser());
-    final result = await chain.invoke({'topic': topic});
-    print(result);
+    final summarizeChain =
+        SummarizeChain.stuff(llm: llm, promptTemplate: promptTemplate);
+
+    final result = await summarizeChain.run(docs);
     return result;
   }
 }
