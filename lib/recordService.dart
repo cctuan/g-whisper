@@ -121,9 +121,11 @@ class RecorderService {
     }
   }
 
-  Future<void> stopRecording() async {
-    final path = await _recorder.stop();
-    _isRecording = false;
+  Future<void> stopRecording([String? path]) async {
+    if (_isRecording) {
+      path = await _recorder.stop();
+      _isRecording = false;
+    }
     _recordedFilePath = path;
     onRecordingStateChanged?.call();
     lastVolumeStatus = false;
@@ -258,14 +260,36 @@ class RecorderService {
     Directory tempDir = await getApplicationDocumentsDirectory();
     String tempPath = tempDir.path;
 
+    // Check the file extension and convert if necessary
+    String inputFilePath = filePath;
+    if (filePath.endsWith('.mov')) {
+      String wavFilePath = "$tempPath/converted_audio.wav";
+      String convertCommand =
+          "-i $filePath -vn -acodec pcm_s16le -ar 44100 -ac 2 $wavFilePath -y";
+
+      await FFmpegKit.execute(convertCommand).then((session) async {
+        final returnCode = await session.getReturnCode();
+        if (returnCode != null && returnCode.isValueSuccess()) {
+          print("Conversion to wav succeeded");
+          inputFilePath = wavFilePath;
+        } else if (returnCode != null && returnCode.isValueError()) {
+          print("Error occurred while converting mov to wav");
+          return parts; // Return an empty list if conversion fails
+        } else {
+          print("FFmpeg process did not return a valid status for conversion");
+          return parts; // Return an empty list if conversion fails
+        }
+      });
+    }
+
     // Calculate the duration of each part
-    double duration = await getDuration(filePath);
+    double duration = await getDuration(inputFilePath);
     print('Duration: $duration');
 
     double partDuration = duration / numberOfParts;
     if (partDuration <= 1) {
       // Check if the duration calculation is correct
-      parts.add(AudioPart(File(filePath),
+      parts.add(AudioPart(File(inputFilePath),
           0)); // Entire file as one part if duration calculation is too small
       return parts;
     }
@@ -275,7 +299,7 @@ class RecorderService {
       double startTime = partDuration * i;
       String outputFileName = "$tempPath/output_part_$i.wav";
       String command =
-          "-i $filePath -ss $startTime -t $partDuration -c copy $outputFileName -y";
+          "-i $inputFilePath -ss $startTime -t $partDuration -c copy $outputFileName -y";
 
       await FFmpegKit.execute(command).then((session) async {
         final returnCode = await session.getReturnCode();
@@ -344,6 +368,7 @@ class RecorderService {
 
     LlmOptions options = LlmOptions(
       apiKey: settings?['openai_key'],
+      openAiModel: settings?['openai_model'],
       apiUrl: settings?['ollama_url'],
       model: settings?['ollama_model'],
     );
@@ -388,6 +413,7 @@ class RecorderService {
     }
     LlmOptions options = LlmOptions(
       apiKey: settings?['openai_key'],
+      openAiModel: settings?['openai_model'],
       apiUrl: settings?['ollama_url'],
       model: settings?['ollama_model'],
     );

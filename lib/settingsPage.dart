@@ -18,6 +18,8 @@ class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController openAiKeyController = TextEditingController();
   final TextEditingController ollamaUrlController = TextEditingController();
   final TextEditingController ollamaModelController = TextEditingController();
+  final TextEditingController openAiModelController = TextEditingController();
+  String openAiModel = 'gpt-3.5-turbo'; // Default model
   final TextEditingController promptController = TextEditingController();
   List<PromptItem> prompts = [];
   int? defaultPromptIndex;
@@ -44,6 +46,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> loadSettings() async {
     var settings = await settingsService.loadSettings();
     setState(() {
+      openAiModel = settings['openai_model'];
       openAiKeyController.text = settings['openai_key'];
       ollamaUrlController.text = settings['ollama_url'];
       ollamaModelController.text = settings['ollama_model'];
@@ -56,6 +59,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> saveSettings() async {
     await settingsService.saveSettings(
         openAiKeyController.text,
+        openAiModel,
         ollamaUrlController.text,
         ollamaModelController.text,
         useOpenAI,
@@ -115,7 +119,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
             ),
-            if (useOpenAI)
+            if (useOpenAI) ...[
               TextField(
                 controller: openAiKeyController,
                 decoration: InputDecoration(
@@ -123,6 +127,22 @@ class _SettingsPageState extends State<SettingsPage> {
                   helperText: 'Enter your OpenAI API Key here',
                 ),
               ),
+              DropdownButton<String>(
+                value: openAiModel,
+                onChanged: (String? newValue) {
+                  setState(() {
+                    openAiModel = newValue!;
+                  });
+                },
+                items: <String>['gpt-3.5-turbo', 'gpt-4-turbo', 'gpt-4o']
+                    .map<DropdownMenuItem<String>>((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+              ),
+            ],
             ListTile(
               title: const Text("Ollama"),
               leading: Radio<bool>(
@@ -151,26 +171,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ],
-            // TextField(
-            //   controller: openAiKeyController,
-            //   decoration: InputDecoration(
-            //     labelText: 'OpenAI Key',
-            //     labelStyle: TextStyle(
-            //       fontSize: 18, // Larger font size for label
-            //       color: Colors.grey[800], // Custom color for label
-            //     ),
-            //     enabledBorder: OutlineInputBorder(
-            //       borderSide: BorderSide(color: Colors.grey[300]!, width: 1.0),
-            //     ),
-            //     focusedBorder: OutlineInputBorder(
-            //       borderSide: BorderSide(color: Colors.blue[300]!, width: 2.0),
-            //     ),
-            //   ),
-            //   style: TextStyle(
-            //     fontSize: 16, // Smaller font size for input text
-            //     color: Colors.black, // Input text color
-            //   ),
-            // ),
             const SizedBox(height: 10),
             ListView.builder(
               shrinkWrap: true,

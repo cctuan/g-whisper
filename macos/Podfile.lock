@@ -1,4 +1,6 @@
 PODS:
+  - desktop_drop (0.0.1):
+    - FlutterMacOS
   - ffmpeg-kit-macos-https (6.0)
   - ffmpeg_kit_flutter (6.0.3):
     - ffmpeg_kit_flutter/https (= 6.0.3)
@@ -30,6 +32,7 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
+  - desktop_drop (from `Flutter/ephemeral/.symlinks/plugins/desktop_drop/macos`)
   - ffmpeg_kit_flutter (from `Flutter/ephemeral/.symlinks/plugins/ffmpeg_kit_flutter/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - hotkey_manager_macos (from `Flutter/ephemeral/.symlinks/plugins/hotkey_manager_macos/macos`)
@@ -47,6 +50,8 @@ SPEC REPOS:
     - HotKey
 
 EXTERNAL SOURCES:
+  desktop_drop:
+    :path: Flutter/ephemeral/.symlinks/plugins/desktop_drop/macos
   ffmpeg_kit_flutter:
     :path: Flutter/ephemeral/.symlinks/plugins/ffmpeg_kit_flutter/macos
   FlutterMacOS:
@@ -69,6 +74,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/window_manager/macos
 
 SPEC CHECKSUMS:
+  desktop_drop: 69eeff437544aa619c8db7f4481b3a65f7696898
   ffmpeg-kit-macos-https: 60de703db964ccca7fd0d4d1611f4c102a8139cc
   ffmpeg_kit_flutter: 5bd75928cf88ec177cea410b027681e4bfe09452
   FlutterMacOS: 8f6f14fa908a6fb3fba0cd85dbd81ec4b251fb24

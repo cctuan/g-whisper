@@ -8,6 +8,7 @@ class SettingsService {
     String openAiKey = prefs.getString('openai_key') ?? '';
     String ollamaUrl = prefs.getString('ollama_url') ?? '';
     String ollamaModel = prefs.getString('ollama_model') ?? '';
+    String openAiModel = prefs.getString('openai_model') ?? '';
     bool useOpenAI =
         prefs.getBool('use_openai') ?? true; // Default to using OpenAI
     List<String> promptsJson = prefs.getStringList('prompts') ?? [];
@@ -17,6 +18,7 @@ class SettingsService {
         .toList();
 
     return {
+      'openai_model': openAiModel,
       'openai_key': openAiKey,
       'ollama_url': ollamaUrl,
       'ollama_model': ollamaModel,
@@ -28,6 +30,7 @@ class SettingsService {
 
   Future<void> saveSettings(
       String openAiKey,
+      String openAiModel,
       String ollamaUrl,
       String ollamaModel,
       bool useOpenAI,
@@ -37,6 +40,7 @@ class SettingsService {
     await prefs.setString('openai_key', openAiKey);
     await prefs.setString('ollama_url', ollamaUrl);
     await prefs.setString('ollama_model', ollamaModel);
+    await prefs.setString('openai_model', openAiModel);
     await prefs.setBool('use_openai', useOpenAI);
     List<String> promptsJson =
         prompts.map((prompt) => json.encode(prompt.toJson())).toList();

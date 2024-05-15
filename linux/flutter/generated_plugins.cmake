@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  desktop_drop
   hotkey_manager_linux
   record_linux
   screen_retriever
