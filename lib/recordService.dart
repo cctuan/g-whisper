@@ -39,6 +39,7 @@ class AudioPart {
 typedef RecordCompleteCallback = void Function(RecordResult result,
     [int? index]);
 typedef RecordAmplitudeChange = void Function(bool haVoice);
+typedef StatusUpdateCallback = void Function(String status);
 
 class RecorderService {
   Whisper whisper = Whisper();
@@ -55,6 +56,7 @@ class RecorderService {
   final fileManager = FileManager();
   VoidCallback? onRecordingStateChanged;
   RecordCompleteCallback? onRecordCompleteReturn;
+  StatusUpdateCallback? onStatusUpdateCallback;
   RecordAmplitudeChange? onAmplitudeChange;
   Map<String, dynamic>? settings;
   double thresholdHigh = -39.0; // 高于初始值的百分比
@@ -111,7 +113,7 @@ class RecorderService {
   Future<void> startRecording() async {
     if (await _recorder.hasPermission()) {
       Directory? dir = await getApplicationDocumentsDirectory();
-      String path = '${dir!.path}/record.wav';
+      String path = '${dir!.path}/record.m4a';
       await _recorder.start(
         const RecordConfig(encoder: AudioEncoder.wav),
         path: path,
@@ -133,7 +135,9 @@ class RecorderService {
       try {
         settings = await settingsService.loadSettings();
         setProcessing(true);
+        onStatusUpdateCallback?.call('Transcribing audio...');
         final text = await transcribeAudioOpenAi(path);
+        onStatusUpdateCallback?.call('Transcribed audio successfully.');
         handleText(text);
       } catch (e) {
         // Handle the error more specifically if you can
@@ -148,6 +152,8 @@ class RecorderService {
     } else {
       setProcessing(false);
       print("Recording failed to save or was cancelled.");
+      onStatusUpdateCallback
+          ?.call("Recording failed to save or was cancelled.");
     }
   }
 
@@ -161,10 +167,11 @@ class RecorderService {
 
   Future<String> transcribeAudioOpenAi(String filePath) async {
     try {
+      onStatusUpdateCallback?.call("Transcribing audio with whisper...");
       File audioFile = File(filePath);
       int fileSizeInBytes = await audioFile.length();
       double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
-      int numberOfParts = (fileSizeInMB / 24).ceil();
+      int numberOfParts = (fileSizeInMB / 26).ceil();
       // 切割檔案
       List<AudioPart> files =
           await splitAudioFile(filePath, numberOfParts); // 25 MB
@@ -195,6 +202,7 @@ class RecorderService {
       return transcriptions.join("\n");
     } catch (e) {
       print("Error during transcription: $e");
+      onStatusUpdateCallback?.call("Error during transcription: $e");
       return "";
     }
   }
@@ -262,25 +270,27 @@ class RecorderService {
 
     // Check the file extension and convert if necessary
     String inputFilePath = filePath;
-    if (filePath.endsWith('.mov')) {
-      String wavFilePath = "$tempPath/converted_audio.wav";
-      String convertCommand =
-          "-i $filePath -vn -acodec pcm_s16le -ar 44100 -ac 2 $wavFilePath -y";
+    String m4aFilePath = "$tempPath/converted_audio.m4a";
+    String convertCommand =
+        "-i $filePath -vn -acodec aac -ar 44100 -ac 2 $m4aFilePath -y";
 
-      await FFmpegKit.execute(convertCommand).then((session) async {
-        final returnCode = await session.getReturnCode();
-        if (returnCode != null && returnCode.isValueSuccess()) {
-          print("Conversion to wav succeeded");
-          inputFilePath = wavFilePath;
-        } else if (returnCode != null && returnCode.isValueError()) {
-          print("Error occurred while converting mov to wav");
-          return parts; // Return an empty list if conversion fails
-        } else {
-          print("FFmpeg process did not return a valid status for conversion");
-          return parts; // Return an empty list if conversion fails
-        }
-      });
-    }
+    await FFmpegKit.execute(convertCommand).then((session) async {
+      final returnCode = await session.getReturnCode();
+      if (returnCode != null && returnCode.isValueSuccess()) {
+        print("Conversion to m4a succeeded");
+        inputFilePath = m4aFilePath;
+      } else if (returnCode != null && returnCode.isValueError()) {
+        print("Error occurred while converting mov to m4a");
+        onStatusUpdateCallback
+            ?.call("Error occurred while converting mov to m4a");
+        return parts; // Return an empty list if conversion fails
+      } else {
+        print("FFmpeg process did not return a valid status for conversion");
+        onStatusUpdateCallback?.call(
+            "FFmpeg process did not return a valid status for conversion");
+        return parts; // Return an empty list if conversion fails
+      }
+    });
 
     // Calculate the duration of each part
     double duration = await getDuration(inputFilePath);
@@ -293,11 +303,13 @@ class RecorderService {
           0)); // Entire file as one part if duration calculation is too small
       return parts;
     }
+    onStatusUpdateCallback
+        ?.call("Splitting audio into $numberOfParts parts...");
 
     // Generate FFmpeg commands and execute
     for (int i = 0; i < numberOfParts; i++) {
       double startTime = partDuration * i;
-      String outputFileName = "$tempPath/output_part_$i.wav";
+      String outputFileName = "$tempPath/output_part_$i.m4a";
       String command =
           "-i $inputFilePath -ss $startTime -t $partDuration -c copy $outputFileName -y";
 
@@ -308,7 +320,11 @@ class RecorderService {
           parts.add(AudioPart(File(outputFileName), startTime));
         } else if (returnCode != null && returnCode.isValueError()) {
           print("Error occurred while splitting part $i");
+          onStatusUpdateCallback
+              ?.call("Error occurred while splitting part $i.");
         } else {
+          onStatusUpdateCallback?.call(
+              "FFmpeg process did not return a valid status for part $i");
           print("FFmpeg process did not return a valid status for part $i");
         }
       });
@@ -388,16 +404,19 @@ class RecorderService {
     List<PromptItem> prompts = settings?['prompts'] ?? [];
     if (prompts.isEmpty || settings == null) {
       print("Settings are not configured properly.");
+      onStatusUpdateCallback?.call("Settings are not configured properly.");
       setProcessing(false);
       return;
     }
     if (settings?['use_openai'] && settings?['openai_key'] == null) {
       print("Settings are not configured properly.");
+      onStatusUpdateCallback?.call("Settings are not configured properly.");
       setProcessing(false);
       return;
     }
     if (settings?['use_openai'] == false && settings?['ollama_url'] == null) {
       print("Settings are not configured properly.");
+      onStatusUpdateCallback?.call("Settings are not configured properly.");
       setProcessing(false);
       return;
     }
@@ -409,6 +428,7 @@ class RecorderService {
     if (defaultPromptIndex! >= prompts.length) {
       print("Settings are not configured properly.");
       setProcessing(false);
+      onStatusUpdateCallback?.call("Settings are not configured properly.");
       return;
     }
     LlmOptions options = LlmOptions(
@@ -417,6 +437,7 @@ class RecorderService {
       apiUrl: settings?['ollama_url'],
       model: settings?['ollama_model'],
     );
+    onStatusUpdateCallback?.call("Processing summary...");
 
     String result = await llmService.callLlm(
         promptTemplate ?? '', content, settings?['use_openai'], options);
@@ -444,6 +465,7 @@ class RecorderService {
       promptText: promptTemplate,
     );
     setProcessing(false);
+    onStatusUpdateCallback?.call("Summary processed successfully.");
     onRecordCompleteReturn?.call(recordResult);
     // Share the message
     // Share.share(message);

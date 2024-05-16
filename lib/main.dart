@@ -16,6 +16,8 @@ GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
+ValueNotifier<String?> messageNotifier = ValueNotifier<String?>(null);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
@@ -40,6 +42,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   List<RecordResult> recordLogs = []; // 存储录音记录的列表
   bool hasVoice = false;
   bool isDragging = false;
+  ValueNotifier<String?> messageNotifier = ValueNotifier<String?>(null);
+
   @override
   void initState() {
     _recorderService = RecorderService();
@@ -59,6 +63,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
         } else {
           recordLogs.insert(0, result); // Insert new record at the beginning
         }
+        hideMessage();
       });
     };
     _recorderService.onAmplitudeChange = (bool voicePresent) {
@@ -66,9 +71,21 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
       print(voicePresent);
       updateTrayIcon();
     };
+    _recorderService.onStatusUpdateCallback = (String message) {
+      showMessage(message);
+    };
     _setupHotKey();
     initTray();
     super.initState();
+  }
+
+  void showMessage(String message) {
+    print("Message: $message");
+    messageNotifier.value = message;
+  }
+
+  void hideMessage() {
+    messageNotifier.value = null;
   }
 
   Future<void> initTray() async {
@@ -184,7 +201,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
   void copyRecording(RecordResult recordResult) {
     final String content =
-        "Recording on ${recordResult.timestamp}:\nOriginal Text: ${recordResult.originalText}\nProcessed Text: ${recordResult.processedText}";
+        "Recording on ${recordResult.timestamp}:\nProcessed Text: ${recordResult.processedText}";
     Clipboard.setData(ClipboardData(text: content)).then((_) {
       _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(content: Text('Recording copied to clipboard!')),
@@ -298,14 +315,15 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                     String filePath = details.files.first.path;
                     if (filePath.endsWith('.wav') ||
                         filePath.endsWith('.mp3') ||
-                        filePath.endsWith('.mov')) {
+                        filePath.endsWith('.mov') ||
+                        filePath.endsWith('.m4a')) {
                       _recorderService.stopRecording(details.files.first.path);
                     } else {
                       // Show a message to the user indicating the file format is not supported
                       _scaffoldMessengerKey.currentState?.showSnackBar(
                         SnackBar(
                             content: Text(
-                                'Unsupported file format. Please use WAV or MP3.')),
+                                'Unsupported file format. Please use WAV, MP3, mov or m4a.')),
                       );
                     }
                   }
@@ -365,6 +383,24 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                 : Text(_recorderService.isRecording
                                     ? 'Recording'
                                     : 'Pausing'),
+                            ValueListenableBuilder<String?>(
+                              valueListenable: messageNotifier,
+                              builder: (context, message, child) {
+                                if (message == null) {
+                                  return Container(); // No message, return an empty container
+                                }
+                                return Container(
+                                  color: Colors.blue,
+                                  padding: EdgeInsets.all(8.0),
+                                  width: double.infinity,
+                                  child: Text(
+                                    message,
+                                    style: TextStyle(color: Colors.white),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                );
+                              },
+                            ),
                           ],
                         ),
                         Expanded(
