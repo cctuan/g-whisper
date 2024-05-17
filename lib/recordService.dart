@@ -165,34 +165,51 @@ class RecorderService {
     setProcessing(false);
   }
 
+  Future<String> callWhisperApi(AudioPart part) async {
+    try {
+      OpenAI.requestsTimeOut = Duration(minutes: 5);
+      OpenAI.apiKey = settings?['openai_key'] ?? "";
+      OpenAIAudioModel transcription =
+          await OpenAI.instance.audio.createTranscription(
+        file: part.file,
+        model: "whisper-1",
+        responseFormat: OpenAIAudioResponseFormat.srt,
+      );
+      // Print the transcription to the console or handle it as needed.
+      return transcription.text;
+    } catch (e) {
+      print("Error during transcription: $e");
+      return "";
+    }
+  }
+
   Future<String> transcribeAudioOpenAi(String filePath) async {
     try {
       onStatusUpdateCallback?.call("Transcribing audio with whisper...");
       File audioFile = File(filePath);
       int fileSizeInBytes = await audioFile.length();
       double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
-      int numberOfParts = (fileSizeInMB / 26).ceil();
+      int numberOfParts = (fileSizeInMB / 10).ceil();
       // 切割檔案
       List<AudioPart> files =
-          await splitAudioFile(filePath, numberOfParts); // 25 MB
+          await splitAudioFile(filePath, numberOfParts); // 2 MB
 
       List<String> transcriptions = [];
+      List<Future<String>> transcriptionFutures = files.map((part) async {
+        String transcriptionText = await callWhisperApi(part);
+        return adjustTimestamps(transcriptionText, part.startTime, 0);
+      }).toList();
+
+      List<String> results = await Future.wait(transcriptionFutures);
+
       int srtIndex = 1; // SRT index starts at 1
 
-      for (AudioPart part in files) {
-        OpenAI.apiKey = settings?['openai_key'] ?? "";
-        OpenAIAudioModel transcription =
-            await OpenAI.instance.audio.createTranscription(
-          file: part.file,
-          model: "whisper-1",
-          responseFormat: OpenAIAudioResponseFormat.srt,
-        );
-        String adjustedSrt =
-            adjustTimestamps(transcription.text, part.startTime, srtIndex);
+      for (String transcription in results) {
+        String adjustedSrt = adjustSrtIndices(transcription, srtIndex);
         transcriptions.add(adjustedSrt);
 
         // Update the SRT index to maintain continuity
-        srtIndex += transcription.text
+        srtIndex += adjustedSrt
             .split('\n')
             .where((line) => line.contains('-->'))
             .length;
@@ -205,6 +222,33 @@ class RecorderService {
       onStatusUpdateCallback?.call("Error during transcription: $e");
       return "";
     }
+  }
+
+  String adjustSrtIndices(String srtContent, int initialIndex) {
+    final lines = srtContent.split('\n');
+    StringBuffer adjustedSrt = StringBuffer();
+    int index = initialIndex; // 序号从initialIndex开始
+    bool isNextSubtitleText = false;
+
+    for (var i = 0; i < lines.length; i++) {
+      String line = lines[i].trim();
+      if (line.isEmpty) {
+        continue; // 忽略空行
+      }
+      if (isNextSubtitleText) {
+        adjustedSrt.writeln(line); // 直接写入字幕文本
+        isNextSubtitleText = false; // 重置标志
+        continue;
+      }
+      if (line.contains('-->')) {
+        adjustedSrt.writeln(index.toString()); // 在时间戳前添加序号
+        index++; // 序号递增
+        adjustedSrt.writeln(line); // 写入时间戳
+        isNextSubtitleText = true;
+      }
+    }
+
+    return adjustedSrt.toString();
   }
 
   String adjustTimestamps(
