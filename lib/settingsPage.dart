@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import './SettingService.dart';
 import './PromptItem.dart';
-
-import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -18,12 +15,13 @@ class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController openAiKeyController = TextEditingController();
   final TextEditingController ollamaUrlController = TextEditingController();
   final TextEditingController ollamaModelController = TextEditingController();
-  final TextEditingController openAiModelController = TextEditingController();
   String openAiModel = 'gpt-3.5-turbo'; // Default model
+  String localWhisperModel = 'base'; // Default local whisper model
   final TextEditingController promptController = TextEditingController();
   List<PromptItem> prompts = [];
   int? defaultPromptIndex;
-  bool useOpenAI = true; // true for OpenAI, false for Ollama
+  bool useOpenAIWhisper = true; // true for OpenAI, false for Local Whisper
+  bool useOpenAILLM = true; // true for OpenAI, false for Ollama
 
   @override
   void initState() {
@@ -46,13 +44,19 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> loadSettings() async {
     var settings = await settingsService.loadSettings();
     setState(() {
-      openAiModel = settings['openai_model'];
-      openAiKeyController.text = settings['openai_key'];
-      ollamaUrlController.text = settings['ollama_url'];
-      ollamaModelController.text = settings['ollama_model'];
+      openAiModel = (settings['openai_model']?.isNotEmpty ?? false)
+          ? settings['openai_model']
+          : 'gpt-3.5-turbo';
+      localWhisperModel = (settings['local_whisper_model']?.isNotEmpty ?? false)
+          ? settings['local_whisper_model']
+          : 'base';
+      openAiKeyController.text = settings['openai_key'] ?? '';
+      ollamaUrlController.text = settings['ollama_url'] ?? '';
+      ollamaModelController.text = settings['ollama_model'] ?? '';
       prompts = settings['prompts'];
-      useOpenAI = settings['use_openai'];
-      defaultPromptIndex = settings['defaultPromptIndex'];
+      useOpenAIWhisper = settings['use_openai_whisper'] ?? false;
+      useOpenAILLM = settings['use_openai_llm'] ?? false;
+      defaultPromptIndex = settings['defaultPromptIndex'] ?? 0;
     });
   }
 
@@ -62,10 +66,12 @@ class _SettingsPageState extends State<SettingsPage> {
         openAiModel,
         ollamaUrlController.text,
         ollamaModelController.text,
-        useOpenAI,
+        useOpenAIWhisper,
+        useOpenAILLM,
+        localWhisperModel,
         prompts,
         defaultPromptIndex);
-    // Navigator.pop(context);
+    Navigator.pop(context);
   }
 
   @override
@@ -81,9 +87,8 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    Theme.of(context).primaryColor, // Background color
-                foregroundColor: Colors.white, // Foreground color
+                backgroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Colors.white,
               ),
               onPressed: () {
                 if (openAiKeyController.text.isNotEmpty &&
@@ -93,7 +98,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     defaultPromptIndex != null &&
                     prompts.length > defaultPromptIndex!) {
                   saveSettings();
-                  Navigator.pop(context);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -107,19 +111,78 @@ class _SettingsPageState extends State<SettingsPage> {
               child: const Text('Save Settings'),
             ),
             const SizedBox(height: 20),
+            Text(
+              "STT Options",
+              style: Theme.of(context).textTheme.headline6,
+            ),
             ListTile(
-              title: const Text("OpenAI"),
+              title: const Text("Use Local Whisper"),
               leading: Radio<bool>(
-                value: true,
-                groupValue: useOpenAI,
+                value: false,
+                groupValue: useOpenAIWhisper,
                 onChanged: (bool? value) {
                   setState(() {
-                    useOpenAI = value!;
+                    useOpenAIWhisper = value!;
                   });
                 },
               ),
             ),
-            if (useOpenAI) ...[
+            if (!useOpenAIWhisper) ...[
+              DropdownButton<String>(
+                value: localWhisperModel,
+                onChanged: (String? newValue) {
+                  setState(() {
+                    localWhisperModel = newValue!;
+                  });
+                },
+                items: <String>['tiny', 'base', 'small', 'medium']
+                    .map<DropdownMenuItem<String>>((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+              ),
+            ],
+            ListTile(
+              title: const Text("Use OpenAI Whisper"),
+              leading: Radio<bool>(
+                value: true,
+                groupValue: useOpenAIWhisper,
+                onChanged: (bool? value) {
+                  setState(() {
+                    useOpenAIWhisper = value!;
+                  });
+                },
+              ),
+            ),
+            if (useOpenAIWhisper) ...[
+              TextField(
+                controller: openAiKeyController,
+                decoration: InputDecoration(
+                  labelText: 'OpenAI API Key',
+                  helperText: 'Enter your OpenAI API Key here',
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            Text(
+              "LLM Options",
+              style: Theme.of(context).textTheme.headline6,
+            ),
+            ListTile(
+              title: const Text("Use OpenAI LLM"),
+              leading: Radio<bool>(
+                value: true,
+                groupValue: useOpenAILLM,
+                onChanged: (bool? value) {
+                  setState(() {
+                    useOpenAILLM = value!;
+                  });
+                },
+              ),
+            ),
+            if (useOpenAILLM) ...[
               TextField(
                 controller: openAiKeyController,
                 decoration: InputDecoration(
@@ -144,18 +207,18 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
             ListTile(
-              title: const Text("Ollama"),
+              title: const Text("Use Ollama"),
               leading: Radio<bool>(
                 value: false,
-                groupValue: useOpenAI,
+                groupValue: useOpenAILLM,
                 onChanged: (bool? value) {
                   setState(() {
-                    useOpenAI = value!;
+                    useOpenAILLM = value!;
                   });
                 },
               ),
             ),
-            if (!useOpenAI) ...[
+            if (!useOpenAILLM) ...[
               TextField(
                 controller: ollamaUrlController,
                 decoration: InputDecoration(
@@ -228,7 +291,15 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void dispose() {
     openAiKeyController.dispose();
+    ollamaUrlController.dispose();
+    ollamaModelController.dispose();
     promptController.dispose();
     super.dispose();
   }
+}
+
+void main() {
+  runApp(MaterialApp(
+    home: SettingsPage(),
+  ));
 }

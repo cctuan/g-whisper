@@ -1,4 +1,4 @@
-package com.example.flutter_application_yt
+package com.example.g_record_helper
 
 import io.flutter.embedding.android.FlutterActivity
 
