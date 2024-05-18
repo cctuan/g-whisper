@@ -168,14 +168,13 @@ class RecorderService {
         if (settings?['use_openai_whisper'] == false) {
           print("Transcribing audio with local whisper...");
           text = await transcribeAudioLocal(path);
+          await localWhisper?.killCurrentProcess();
         } else {
           text = await transcribeAudioOpenAi(path);
         }
         print(text);
         onStatusUpdateCallback?.call('Transcribed audio successfully.');
         handleText(text);
-        // 删除录音文件
-        File(path).deleteSync();
       } catch (e) {
         // Handle the error more specifically if you can
         if (e is SocketException) {
@@ -583,6 +582,7 @@ class RecorderService {
   }
 
   void dispose() {
+    localWhisper?.killCurrentProcess();
     _recorder.dispose();
   }
 }

@@ -25,6 +25,7 @@ class WhisperTranscriber {
   final Directory tempDir;
   final String whispercppPath;
   SharedPreferences? _prefs;
+  Process? _currentProcess;
 
   WhisperTranscriber({
     required this.tempDir,
@@ -115,22 +116,27 @@ class WhisperTranscriber {
 
   Future<ProcessResult> _runCommand(String command, List<String> args) async {
     print("\$ $command ${args.join(' ')}\n");
-    var process = await Process.start(command, args);
+    _currentProcess = await Process.start(command, args);
     var stdout = '';
     var stderr = '';
-    process.stderr.transform(utf8.decoder).forEach((line) {
+    _currentProcess!.stderr.transform(utf8.decoder).forEach((line) {
       stderr += line;
       print(line);
     });
-    process.stdout.transform(utf8.decoder).forEach((line) {
+    _currentProcess!.stdout.transform(utf8.decoder).forEach((line) {
       stdout += line;
       print(line);
     });
 
-    var exitCode = await process.exitCode;
+    var exitCode = await _currentProcess!.exitCode;
     print('\n');
 
-    return ProcessResult(process.pid, exitCode, stdout, stderr);
+    return ProcessResult(_currentProcess!.pid, exitCode, stdout, stderr);
+  }
+
+  Future<void> killCurrentProcess() async {
+    _currentProcess?.kill(ProcessSignal.sigkill);
+    _currentProcess = null;
   }
 
   static Future<void> checkAndDownloadModelIfNotExists(String model) async {
