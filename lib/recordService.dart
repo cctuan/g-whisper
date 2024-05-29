@@ -10,23 +10,10 @@ import 'ai.dart';
 import 'package:whisper/whisper_dart.dart';
 import 'fileManager.dart';
 import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
+import './recordResult.dart';
 import './SettingService.dart';
 import './PromptItem.dart';
 import './localWhisper.dart'; // 引入 WhisperTranscriber
-
-class RecordResult {
-  String originalText;
-  String processedText;
-  final String timestamp;
-  String promptText; // Added to store the prompt text itself
-
-  RecordResult({
-    required this.originalText,
-    required this.processedText,
-    required this.timestamp,
-    this.promptText = '',
-  });
-}
 
 class AudioPart {
   File file;

@@ -5,12 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:markdown/markdown.dart' as md;
 import 'package:window_manager/window_manager.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import './storage.dart';
 import './settingsPage.dart';
 import './recordService.dart';
 import './PromptItem.dart';
+import './recordResult.dart';
 
 GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
@@ -22,14 +23,17 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   await hotKeyManager.unregisterAll();
-  runApp(const MyApp(title: 'G Whisper'));
+  List<RecordResult> recordLogs = await DatabaseHelper().getRecordings();
+
+  runApp(MyApp(title: 'G Whisper', initialRecordLogs: recordLogs));
   // await hotKeyManager.unregisterAll();
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, required this.title});
+  const MyApp(
+      {super.key, required this.title, required this.initialRecordLogs});
   final String title;
-
+  final List<RecordResult> initialRecordLogs;
   @override
   State<MyApp> createState() => _MyHomePageState();
 }
@@ -46,6 +50,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
   @override
   void initState() {
+    recordLogs = widget.initialRecordLogs;
     _recorderService = RecorderService();
     _recorderService.onRecordingStateChanged = () {
       setState(() {
@@ -60,8 +65,10 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
       setState(() {
         if (index != null && index >= 0 && index < recordLogs.length) {
           recordLogs[index] = result; // Replace the existing entry at the index
+          DatabaseHelper().updateRecording(result);
         } else {
           recordLogs.insert(0, result); // Insert new record at the beginning
+          DatabaseHelper().insertRecording(result);
         }
         hideMessage();
       });
@@ -214,7 +221,9 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
   void deleteRecording(int index) {
     setState(() {
+      RecordResult record = recordLogs[index];
       recordLogs.removeAt(index);
+      DatabaseHelper().deleteRecording(record.id!);
     });
   }
 
@@ -228,6 +237,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     setState(() {
       recordLogs[index].originalText = recordResult.originalText;
       recordLogs[index].processedText = recordResult.processedText;
+      DatabaseHelper().updateRecording(recordLogs[index]);
     });
     // 保存逻辑，可能是更新状态、发送到服务器等
     print(
@@ -256,6 +266,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                 // Update the logic here to save the edited text
                 setState(() {
                   recordLogs[index].originalText = textEditingController.text;
+                  DatabaseHelper().updateRecording(recordLogs[index]);
                 });
                 Navigator.of(context).pop(); // Close the dialog
               },

@@ -54,6 +54,7 @@ dependencies:
   flutter_markdown: ^0.7.1
   window_manager: ^0.3.8
   desktop_drop: ^0.4.4
+  sqflite: ^2.3.3
 dev_dependencies:
   flutter_test:
     sdk: flutter
