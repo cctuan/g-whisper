@@ -448,7 +448,6 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                   saveRecordResult(recordResult, index);
                                 }
                               });
-
                               return Card(
                                 elevation: 4.0,
                                 margin: EdgeInsets.symmetric(
@@ -630,6 +629,9 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
 Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
     Function(String) onSelected) {
+  // Create a set to filter out duplicates
+  final uniquePrompts = <String>{};
+
   return DropdownButton<String>(
     value: currentPrompt,
     onChanged: (newValue) {
@@ -643,7 +645,10 @@ Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
         child: Text('Select a prompt...'),
         enabled: false, // Make it non-selectable
       ),
-      ...prompts.map((PromptItem prompt) {
+      ...prompts.where((PromptItem prompt) {
+        // Check if the prompt is unique before adding it to the set
+        return uniquePrompts.add(prompt.prompt);
+      }).map((PromptItem prompt) {
         return DropdownMenuItem<String>(
           value: prompt.prompt,
           child: Text(prompt.name),
