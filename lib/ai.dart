@@ -15,6 +15,9 @@ class LlmService {
 
   Future<String> callLlm(
       String prompt, String content, bool useOpenAi, LlmOptions config) async {
+    if (!prompt.contains('{topic}')) {
+      prompt = '{topic}\n$prompt';
+    }
     if (useOpenAi) {
       return await callOpenAI(config.apiKey ?? '',
           config.openAiModel ?? 'gpt-3.5-turbo', prompt, content);
