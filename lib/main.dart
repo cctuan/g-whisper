@@ -12,6 +12,7 @@ import './settingsPage.dart';
 import './recordService.dart';
 import './PromptItem.dart';
 import './recordResult.dart';
+import './SettingService.dart';
 
 GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
@@ -39,6 +40,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyApp> with TrayListener {
+  final SettingsService settingsService = SettingsService();
   late final RecorderService _recorderService;
   late HotKey _hotKey;
   bool isSettingsDialogOpen =
@@ -50,6 +52,11 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
   @override
   void initState() {
+    super.initState();
+    _initializeRecorderService();
+  }
+
+  Future<void> _initializeRecorderService() async {
     recordLogs = widget.initialRecordLogs;
     _recorderService = RecorderService();
     _recorderService.onRecordingStateChanged = () {
@@ -58,7 +65,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
         updateTrayIcon();
       });
     };
-    _recorderService.init();
+    await _recorderService.init();
+    setState(() => {});
     _recorderService.onRecordCompleteReturn =
         (RecordResult result, [int? index]) {
       // 在这里处理录音完成后的逻辑
@@ -81,9 +89,11 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     _recorderService.onStatusUpdateCallback = (String message) {
       showMessage(message);
     };
+    settingsService.onSettingChanged = () {
+      setState(() => {});
+    };
     _setupHotKey();
     initTray();
-    super.initState();
   }
 
   void showMessage(String message) {
@@ -629,9 +639,9 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
 Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
     Function(String) onSelected) {
-  // Create a set to filter out duplicates
-  final uniquePrompts = <String>{};
-
+  if (prompts.isEmpty) {
+    currentPrompt = null;
+  }
   return DropdownButton<String>(
     value: currentPrompt,
     onChanged: (newValue) {
@@ -645,10 +655,7 @@ Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
         child: Text('Select a prompt...'),
         enabled: false, // Make it non-selectable
       ),
-      ...prompts.where((PromptItem prompt) {
-        // Check if the prompt is unique before adding it to the set
-        return uniquePrompts.add(prompt.prompt);
-      }).map((PromptItem prompt) {
+      ...prompts.map((PromptItem prompt) {
         return DropdownMenuItem<String>(
           value: prompt.prompt,
           child: Text(prompt.name),

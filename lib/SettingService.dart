@@ -2,7 +2,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import './PromptItem.dart';
 
+typedef SettingChangeCallback = void Function();
+
 class SettingsService {
+  SettingChangeCallback? onSettingChanged;
+
   Future<Map<String, dynamic>> loadSettings() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     String openAiKey = prefs.getString('openai_key') ?? '';
@@ -58,5 +62,6 @@ class SettingsService {
     if (defaultPromptIndex != null) {
       await prefs.setInt('defaultPromptIndex', defaultPromptIndex);
     }
+    onSettingChanged?.call();
   }
 }
