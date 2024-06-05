@@ -227,6 +227,11 @@ class RecorderService {
 
       List<String> results = await Future.wait(transcriptionFutures);
 
+      for (var part in files) {
+        if (part.file.existsSync()) {
+          part.file.deleteSync();
+        }
+      }
       int srtIndex = 1; // SRT index starts at 1
 
       for (String transcription in results) {
