@@ -488,10 +488,12 @@ class RecorderService {
       openAiModel: settings?['openai_model'],
       apiUrl: settings?['ollama_url'],
       model: settings?['ollama_model'],
+      customLlmUrl: settings?['custom_llm_url'],
+      customLlmModel: settings?['custom_llm_model'],
     );
 
     final result = await llmService.callLlm(prompt ?? '',
-        recordResult.originalText, settings?['use_openai_llm'], options);
+        recordResult.originalText, settings?['llm_choice'], options);
 
     recordResult.processedText = result;
     setProcessing(false);
@@ -509,16 +511,26 @@ class RecorderService {
       setProcessing(false);
       return;
     }
-    if (settings?['use_openai_llm'] && settings?['openai_key'] == null) {
+    if (settings?['llm_choice'] == 'openai' &&
+        settings?['openai_key'] == null) {
       print("Settings are not configured properly.");
       onStatusUpdateCallback?.call("Settings are not configured properly.");
       setProcessing(false);
       return;
     }
-    if (settings?['use_openai_llm'] == false &&
+    if (settings?['llm_choice'] == 'ollama' &&
         settings?['ollama_url'] == null) {
       print("Settings are not configured properly.");
-      onStatusUpdateCallback?.call("Settings are not configured properly.");
+      onStatusUpdateCallback
+          ?.call("Ollama's settings are not configured properly.");
+      setProcessing(false);
+      return;
+    }
+
+    if (settings?['llm_choice'] == 'custom' &&
+        settings?['custom_llm_url'] == null) {
+      print("Settings are not configured properly.");
+      onStatusUpdateCallback?.call("Custom LLM's url is not setting properly.");
       setProcessing(false);
       return;
     }
@@ -538,11 +550,13 @@ class RecorderService {
       openAiModel: settings?['openai_model'],
       apiUrl: settings?['ollama_url'],
       model: settings?['ollama_model'],
+      customLlmUrl: settings?['custom_llm_url'],
+      customLlmModel: settings?['custom_llm_model'],
     );
     onStatusUpdateCallback?.call("Processing summary...");
 
     String result = await llmService.callLlm(
-        promptTemplate ?? '', content, settings?['use_openai_llm'], options);
+        promptTemplate ?? '', content, settings?['llm_choice'], options);
 
     // Create a date-time stamp
     String formattedDate =

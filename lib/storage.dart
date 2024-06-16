@@ -40,13 +40,20 @@ class DatabaseHelper {
     );
   }
 
-  Future<void> insertRecording(RecordResult record) async {
+  Future<RecordResult> insertRecording(RecordResult record) async {
     final db = await database;
-    await db.insert(
+    final id = await db.insert(
       'recordings',
       record.toJson(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    final Map<String, dynamic> result = (await db.query(
+      'recordings',
+      where: 'id = ?',
+      whereArgs: [id],
+    ))
+        .first;
+    return RecordResult.fromJson(result);
   }
 
   Future<void> updateRecording(RecordResult record) async {

@@ -15,13 +15,16 @@ class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController openAiKeyController = TextEditingController();
   final TextEditingController ollamaUrlController = TextEditingController();
   final TextEditingController ollamaModelController = TextEditingController();
+  final TextEditingController customLlmUrlController = TextEditingController();
+  final TextEditingController customLlmModelController =
+      TextEditingController();
   String openAiModel = 'gpt-3.5-turbo'; // Default model
   String localWhisperModel = 'base'; // Default local whisper model
   final TextEditingController promptController = TextEditingController();
   List<PromptItem> prompts = [];
   int? defaultPromptIndex;
   bool useOpenAIWhisper = true; // true for OpenAI, false for Local Whisper
-  bool useOpenAILLM = true; // true for OpenAI, false for Ollama
+  String llmChoice = 'openai'; // 'openai', 'ollama', 'custom'
 
   @override
   void initState() {
@@ -53,9 +56,11 @@ class _SettingsPageState extends State<SettingsPage> {
       openAiKeyController.text = settings['openai_key'] ?? '';
       ollamaUrlController.text = settings['ollama_url'] ?? '';
       ollamaModelController.text = settings['ollama_model'] ?? '';
+      customLlmUrlController.text = settings['custom_llm_url'] ?? '';
+      customLlmModelController.text = settings['custom_llm_model'] ?? '';
       prompts = settings['prompts'];
       useOpenAIWhisper = settings['use_openai_whisper'] ?? false;
-      useOpenAILLM = settings['use_openai_llm'] ?? false;
+      llmChoice = settings['llm_choice'] ?? 'openai';
       defaultPromptIndex = settings['defaultPromptIndex'] ?? 0;
     });
   }
@@ -67,10 +72,12 @@ class _SettingsPageState extends State<SettingsPage> {
         ollamaUrlController.text,
         ollamaModelController.text,
         useOpenAIWhisper,
-        useOpenAILLM,
+        llmChoice,
         localWhisperModel,
         prompts,
-        defaultPromptIndex);
+        defaultPromptIndex,
+        customLlmUrlController.text,
+        customLlmModelController.text);
     Navigator.pop(context);
   }
 
@@ -113,7 +120,7 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 20),
             Text(
               "STT Options",
-              style: Theme.of(context).textTheme.headline6,
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
             ListTile(
               title: const Text("Use Local Whisper"),
@@ -168,21 +175,21 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 20),
             Text(
               "LLM Options",
-              style: Theme.of(context).textTheme.headline6,
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
             ListTile(
               title: const Text("Use OpenAI LLM"),
-              leading: Radio<bool>(
-                value: true,
-                groupValue: useOpenAILLM,
-                onChanged: (bool? value) {
+              leading: Radio<String>(
+                value: 'openai',
+                groupValue: llmChoice,
+                onChanged: (String? value) {
                   setState(() {
-                    useOpenAILLM = value!;
+                    llmChoice = value!;
                   });
                 },
               ),
             ),
-            if (useOpenAILLM) ...[
+            if (llmChoice == 'openai') ...[
               TextField(
                 controller: openAiKeyController,
                 decoration: InputDecoration(
@@ -208,17 +215,17 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
             ListTile(
               title: const Text("Use Ollama"),
-              leading: Radio<bool>(
-                value: false,
-                groupValue: useOpenAILLM,
-                onChanged: (bool? value) {
+              leading: Radio<String>(
+                value: 'ollama',
+                groupValue: llmChoice,
+                onChanged: (String? value) {
                   setState(() {
-                    useOpenAILLM = value!;
+                    llmChoice = value!;
                   });
                 },
               ),
             ),
-            if (!useOpenAILLM) ...[
+            if (llmChoice == 'ollama') ...[
               TextField(
                 controller: ollamaUrlController,
                 decoration: InputDecoration(
@@ -231,6 +238,34 @@ class _SettingsPageState extends State<SettingsPage> {
                 decoration: InputDecoration(
                   labelText: 'Ollama Model',
                   helperText: 'Enter the model identifier for Ollama',
+                ),
+              ),
+            ],
+            ListTile(
+              title: const Text("Use Custom LLM"),
+              leading: Radio<String>(
+                value: 'custom',
+                groupValue: llmChoice,
+                onChanged: (String? value) {
+                  setState(() {
+                    llmChoice = value!;
+                  });
+                },
+              ),
+            ),
+            if (llmChoice == 'custom') ...[
+              TextField(
+                controller: customLlmUrlController,
+                decoration: InputDecoration(
+                  labelText: 'Custom LLM URL',
+                  helperText: 'Enter Custom LLM Service URL here',
+                ),
+              ),
+              TextField(
+                controller: customLlmModelController,
+                decoration: InputDecoration(
+                  labelText: 'Custom LLM Model',
+                  helperText: 'Enter the model identifier for Custom LLM',
                 ),
               ),
             ],
@@ -293,6 +328,8 @@ class _SettingsPageState extends State<SettingsPage> {
     openAiKeyController.dispose();
     ollamaUrlController.dispose();
     ollamaModelController.dispose();
+    customLlmUrlController.dispose();
+    customLlmModelController.dispose();
     promptController.dispose();
     super.dispose();
   }

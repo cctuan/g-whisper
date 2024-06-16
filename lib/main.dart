@@ -68,18 +68,21 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     await _recorderService.init();
     setState(() => {});
     _recorderService.onRecordCompleteReturn =
-        (RecordResult result, [int? index]) {
+        (RecordResult result, [int? index]) async {
       // 在这里处理录音完成后的逻辑
-      setState(() {
-        if (index != null && index >= 0 && index < recordLogs.length) {
+      if (index != null && index >= 0 && index < recordLogs.length) {
+        DatabaseHelper().updateRecording(result);
+        setState(() {
           recordLogs[index] = result; // Replace the existing entry at the index
-          DatabaseHelper().updateRecording(result);
-        } else {
-          recordLogs.insert(0, result); // Insert new record at the beginning
-          DatabaseHelper().insertRecording(result);
-        }
-        hideMessage();
-      });
+          hideMessage();
+        });
+      } else {
+        final newRecord = await DatabaseHelper().insertRecording(result);
+        setState(() {
+          recordLogs.insert(0, newRecord); // Insert new record at the beginning
+          hideMessage();
+        });
+      }
     };
     _recorderService.onAmplitudeChange = (bool voicePresent) {
       hasVoice = voicePresent;
@@ -230,11 +233,10 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   }
 
   void deleteRecording(int index) {
-    setState(() {
-      RecordResult record = recordLogs[index];
-      recordLogs.removeAt(index);
-      DatabaseHelper().deleteRecording(record.id!);
-    });
+    RecordResult record = recordLogs[index];
+    recordLogs.removeAt(index);
+    DatabaseHelper().deleteRecording(record.id!);
+    setState(() {});
   }
 
   void shareRecording(RecordResult recordResult) {

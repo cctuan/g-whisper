@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:langchain/langchain.dart';
 import 'package:langchain_openai/langchain_openai.dart';
 import 'package:langchain_ollama/langchain_ollama.dart';
@@ -7,23 +9,63 @@ class LlmOptions {
   String? apiUrl;
   String? model;
   String? openAiModel;
-  LlmOptions({this.apiKey, this.apiUrl, this.model, this.openAiModel});
+  String? customLlmModel;
+  String? customLlmUrl;
+  LlmOptions(
+      {this.apiKey,
+      this.apiUrl,
+      this.model,
+      this.openAiModel,
+      this.customLlmModel,
+      this.customLlmUrl});
 }
 
 class LlmService {
   LlmService() {}
 
-  Future<String> callLlm(
-      String prompt, String content, bool useOpenAi, LlmOptions config) async {
+  Future<String> callLlm(String prompt, String content, String llmChoice,
+      LlmOptions config) async {
     if (!prompt.contains('{topic}')) {
       prompt = '{topic}\n$prompt';
     }
-    if (useOpenAi) {
+    if (llmChoice == 'openai') {
       return await callOpenAI(config.apiKey ?? '',
           config.openAiModel ?? 'gpt-3.5-turbo', prompt, content);
-    } else {
+    } else if (llmChoice == 'ollama') {
       return await callOllama(
           config.apiUrl ?? '', config.model ?? 'llama3', prompt, content);
+    } else if (llmChoice == 'custom') {
+      print(config.customLlmUrl);
+      return await callCustomLlm(config.customLlmUrl ?? '',
+          config.customLlmModel ?? '', prompt, content);
+    } else {
+      throw Exception('Invalid LLM choice');
+    }
+  }
+
+  Future<String> callCustomLlm(
+      String apiUrl, String modelName, String prompt, String topic) async {
+    final String fullUrl = '$apiUrl/$modelName/completions';
+    final Map<String, dynamic> body = {
+      'model': modelName,
+      'prompt': '$topic\n$prompt',
+    };
+    final http.Response response = await http.post(
+      Uri.parse(fullUrl),
+      headers: <String, String>{
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: utf8.encode(jsonEncode(body)),
+    );
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseBody =
+          jsonDecode(utf8.decode(response.bodyBytes));
+      final String result = responseBody['choices'][0]['text'];
+      print(result);
+      return result;
+    } else {
+      throw Exception('Failed to load data');
     }
   }
 
