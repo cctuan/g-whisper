@@ -38,7 +38,8 @@ class RecorderService {
 
   bool get isRecording => _isRecording;
   String? get recordedFilePath => _recordedFilePath;
-  final llmService = LlmService();
+  LlmService? llmService;
+  // final llmService = LlmService();
   final fileManager = FileManager();
   WhisperTranscriber? localWhisper; // 增加本地 WhisperTranscriber
   VoidCallback? onRecordingStateChanged;
@@ -57,6 +58,10 @@ class RecorderService {
     String whispercppPath = await _copyAssetToAppDirectory(
         'assets/executables/whispercpp', tempDir.path);
 
+    String llamaCliPath = await _copyAssetToAppDirectory(
+        'assets/executables/llama-cli', tempDir.path);
+
+    llmService = LlmService(llamaCliPath: llamaCliPath, tempDir: tempDir);
     localWhisper = WhisperTranscriber(
         tempDir: tempDir,
         whispercppPath: whispercppPath); // 初始化本地 WhisperTranscriber
@@ -199,7 +204,7 @@ class RecorderService {
         responseFormat: OpenAIAudioResponseFormat.srt,
       );
       // 删除临时文件
-      part.file.deleteSync();
+      await part.file.delete();
       // Print the transcription to the console or handle it as needed.
       return transcription.text;
     } catch (e) {
@@ -228,8 +233,8 @@ class RecorderService {
       List<String> results = await Future.wait(transcriptionFutures);
 
       for (var part in files) {
-        if (part.file.existsSync()) {
-          part.file.deleteSync();
+        if (await part.file.exists()) {
+          await part.file.delete();
         }
       }
       int srtIndex = 1; // SRT index starts at 1
@@ -246,7 +251,7 @@ class RecorderService {
       }
 
       // 删除临时文件
-      audioFile.deleteSync();
+      await audioFile.delete();
 
       // 合併文本
       return transcriptions.join("\n");
@@ -268,10 +273,10 @@ class RecorderService {
       onStatusUpdateCallback?.call('Transcribing audio locally...');
       await localWhisper!.transcribeToSrt(
           filePath, outputSrtPath, settings?['local_whisper_model'] ?? 'base');
-      String srtContent = File(outputSrtPath + '.srt').readAsStringSync();
+      String srtContent = await File(outputSrtPath + '.srt').readAsString();
       // 删除临时文件
-      File(outputSrtPath + '.srt').deleteSync();
-      File(filePath).deleteSync();
+      await File(outputSrtPath + '.srt').delete();
+      await File(filePath).delete();
       return srtContent;
     } catch (e) {
       print("Error during local transcription: $e");
@@ -466,7 +471,7 @@ class RecorderService {
 
       print(res);
       // 删除临时文件
-      File(filePath).deleteSync();
+      await File(filePath).delete();
       // Print the transcription to the console or handle it as needed.
       return res.toString();
     } catch (e) {
@@ -492,7 +497,7 @@ class RecorderService {
       customLlmModel: settings?['custom_llm_model'],
     );
 
-    final result = await llmService.callLlm(prompt ?? '',
+    String result = await llmService!.callLlm(prompt ?? '',
         recordResult.originalText, settings?['llm_choice'], options);
 
     recordResult.processedText = result;
@@ -555,8 +560,8 @@ class RecorderService {
     );
     onStatusUpdateCallback?.call("Processing summary...");
 
-    String result = await llmService.callLlm(
-        promptTemplate ?? '', content, settings?['llm_choice'], options);
+    String result = await llmService!
+        .callLlm(promptTemplate ?? '', content, 'local_llama', options);
 
     // Create a date-time stamp
     String formattedDate =

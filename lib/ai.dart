@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:langchain/langchain.dart';
 import 'package:langchain_openai/langchain_openai.dart';
@@ -21,26 +22,86 @@ class LlmOptions {
 }
 
 class LlmService {
-  LlmService() {}
+  final String llamaCliPath;
+  final Directory tempDir;
+  LlmService({required this.llamaCliPath, required this.tempDir});
 
   Future<String> callLlm(String prompt, String content, String llmChoice,
       LlmOptions config) async {
-    if (!prompt.contains('{topic}')) {
-      prompt = '{topic}\n$prompt';
-    }
     if (llmChoice == 'openai') {
+      if (!prompt.contains('{topic}')) {
+        prompt = '{topic}\n$prompt';
+      }
       return await callOpenAI(config.apiKey ?? '',
           config.openAiModel ?? 'gpt-3.5-turbo', prompt, content);
     } else if (llmChoice == 'ollama') {
+      if (!prompt.contains('{topic}')) {
+        prompt = '{topic}\n$prompt';
+      }
       return await callOllama(
           config.apiUrl ?? '', config.model ?? 'llama3', prompt, content);
     } else if (llmChoice == 'custom') {
-      print(config.customLlmUrl);
       return await callCustomLlm(config.customLlmUrl ?? '',
           config.customLlmModel ?? '', prompt, content);
+    } else if (llmChoice == 'local_llama') {
+      return await callLocalLlama(prompt, content);
     } else {
       throw Exception('Invalid LLM choice');
     }
+  }
+
+  Future<void> downloadModel(File modelFile) async {
+    final uri = Uri.https('huggingface.co',
+        'taide/Llama3-TAIDE-LX-8B-Chat-Alpha1-4bit/resolve/main/taide-8b-a.3-q4_k_m.gguf');
+    print('Downloading $uri...\n');
+
+    var client = http.Client();
+    final request = http.Request('GET', uri);
+    request.headers['Authorization'] =
+        'Bearer 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';
+    var response = await client.send(request);
+
+    if (response.statusCode >= 300) {
+      final responseBody = await response.stream.bytesToString();
+      throw Exception('Failed to download file: $responseBody');
+    }
+
+    var writer = modelFile.openWrite();
+    await response.stream.pipe(writer);
+    await writer.close();
+    print('Download ${modelFile.path} (${response.contentLength} bytes)\n');
+  }
+
+  Future<String> callLocalLlama(String prompt, String content) async {
+    File modelFile = File('${tempDir.path}/taide-8b-a.3-q4_k_m.gguf');
+    if (!await modelFile.exists()) {
+      await downloadModel(modelFile);
+    }
+
+    var result = await _runCommand(
+        llamaCliPath, ['-m', modelFile.path, '-p', '$content\n$prompt']);
+    if (result.exitCode == 0) {
+      print(result.stdout);
+      return result.stdout;
+    } else {
+      throw Exception('Failed to run local llama: ${result.stderr}');
+    }
+  }
+
+  Future<ProcessResult> _runCommand(String command, List<String> args) async {
+    print("\$ $command ${args.join(' ')}\n");
+    var process = await Process.start(command, args);
+    var stdout = '';
+    var stderr = '';
+    process.stderr.transform(utf8.decoder).forEach((line) {
+      stderr += line;
+    });
+    process.stdout.transform(utf8.decoder).forEach((line) {
+      stdout += line;
+    });
+
+    var exitCode = await process.exitCode;
+    return ProcessResult(process.pid, exitCode, stdout, stderr);
   }
 
   Future<String> callCustomLlm(

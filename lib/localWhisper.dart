@@ -43,7 +43,7 @@ class WhisperTranscriber {
   Future<void> checkAndDownloadModel(String model) async {
     await initialize();
     File modelFile = await getModelFile(model);
-    if (modelFile.existsSync()) {
+    if (await modelFile.exists()) {
       print('Skip download $modelFile\n');
       return;
     }
@@ -78,8 +78,8 @@ class WhisperTranscriber {
   Future<File> _convertWavfile(String sourceFile) async {
     final tempDir = await getTemporaryDirectory();
     File wavfile = File(path.join(tempDir!.path, "input.wav"));
-    if (wavfile.existsSync()) {
-      wavfile.deleteSync();
+    if (await wavfile.exists()) {
+      await wavfile.delete();
     }
     String command =
         '-i $sourceFile -ar 16000 -ac 1 -c:a pcm_s16le ${wavfile.path}';
@@ -142,7 +142,7 @@ class WhisperTranscriber {
   static Future<void> checkAndDownloadModelIfNotExists(String model) async {
     final tempDir = await getTemporaryDirectory();
     File modelFile = File(path.join(tempDir.path, 'ggml-$model.bin'));
-    if (modelFile.existsSync()) {
+    if (await modelFile.exists()) {
       print('Model $model already exists at ${modelFile.path}');
       return;
     }
