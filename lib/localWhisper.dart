@@ -121,11 +121,9 @@ class WhisperTranscriber {
     var stderr = '';
     _currentProcess!.stderr.transform(utf8.decoder).forEach((line) {
       stderr += line;
-      print(line);
     });
     _currentProcess!.stdout.transform(utf8.decoder).forEach((line) {
       stdout += line;
-      print(line);
     });
 
     var exitCode = await _currentProcess!.exitCode;
@@ -134,9 +132,14 @@ class WhisperTranscriber {
     return ProcessResult(_currentProcess!.pid, exitCode, stdout, stderr);
   }
 
-  Future<void> killCurrentProcess() async {
-    _currentProcess?.kill(ProcessSignal.sigkill);
-    _currentProcess = null;
+  void killCurrentProcess() {
+    if (_currentProcess != null) {
+      _currentProcess!.kill();
+      _currentProcess = null;
+      print('Process terminated.');
+    } else {
+      print('No running process to terminate.');
+    }
   }
 
   static Future<void> checkAndDownloadModelIfNotExists(String model) async {

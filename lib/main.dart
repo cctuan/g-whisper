@@ -676,9 +676,34 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
 Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
     Function(String) onSelected) {
+  print(currentPrompt);
+  print(prompts);
+
+  // Handle case when prompts are empty
   if (prompts.isEmpty) {
     currentPrompt = null;
+  } else {
+    // Ensure currentPrompt is in the list of prompts
+    bool promptExists =
+        prompts.any((PromptItem prompt) => prompt.prompt == currentPrompt);
+    if (!promptExists) {
+      currentPrompt = null;
+    }
   }
+
+  // Filter out duplicates if currentPrompt is not null
+  List<PromptItem> filteredPrompts = currentPrompt != null
+      ? prompts.where((PromptItem prompt) {
+          return prompt.prompt != currentPrompt;
+        }).toList()
+      : prompts;
+
+  // Add the currentPrompt back to the list if it's not null
+  if (currentPrompt != null) {
+    filteredPrompts.insert(
+        0, PromptItem(name: currentPrompt, prompt: currentPrompt));
+  }
+
   return DropdownButton<String>(
     value: currentPrompt,
     onChanged: (newValue) {
@@ -692,12 +717,19 @@ Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
         child: Text('Select a prompt...'),
         enabled: false, // Make it non-selectable
       ),
-      ...prompts.map((PromptItem prompt) {
-        return DropdownMenuItem<String>(
-          value: prompt.prompt,
-          child: Text(prompt.name),
-        );
-      }).toList(),
+      if (filteredPrompts.isNotEmpty)
+        ...filteredPrompts.map((PromptItem prompt) {
+          return DropdownMenuItem<String>(
+            value: prompt.prompt,
+            child: Text(prompt.name),
+          );
+        }).toList()
+      else
+        DropdownMenuItem<String>(
+          value: null, // Use null to indicate no selection
+          child: Text('No prompts available'),
+          enabled: false, // Make it non-selectable
+        ),
     ],
   );
 }

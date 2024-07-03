@@ -5,6 +5,8 @@ import 'package:langchain/langchain.dart';
 import 'package:langchain_openai/langchain_openai.dart';
 import 'package:langchain_ollama/langchain_ollama.dart';
 
+typedef StatusUpdateCallback = void Function(String status);
+
 class LlmOptions {
   String? apiKey;
   String? apiUrl;
@@ -12,22 +14,29 @@ class LlmOptions {
   String? openAiModel;
   String? customLlmModel;
   String? customLlmUrl;
+  String? huggingfaceToken;
+  String? huggingfaceGguf;
   LlmOptions(
       {this.apiKey,
       this.apiUrl,
       this.model,
       this.openAiModel,
       this.customLlmModel,
-      this.customLlmUrl});
+      this.customLlmUrl,
+      this.huggingfaceToken,
+      this.huggingfaceGguf});
 }
 
 class LlmService {
   final String llamaCliPath;
   final Directory tempDir;
+  Process? _currentProcess;
+  StatusUpdateCallback? onStatusUpdateCallback;
+
   LlmService({required this.llamaCliPath, required this.tempDir});
 
   Future<String> callLlm(String prompt, String content, String llmChoice,
-      LlmOptions config) async {
+      LlmOptions config, onStatusUpdateCallback) async {
     if (llmChoice == 'openai') {
       if (!prompt.contains('{topic}')) {
         prompt = '{topic}\n$prompt';
@@ -43,41 +52,47 @@ class LlmService {
     } else if (llmChoice == 'custom') {
       return await callCustomLlm(config.customLlmUrl ?? '',
           config.customLlmModel ?? '', prompt, content);
-    } else if (llmChoice == 'local_llama') {
-      return await callLocalLlama(prompt, content);
+    } else if (llmChoice == 'llama_cpp') {
+      return await callLocalLlama(config.huggingfaceToken ?? '',
+          config.huggingfaceGguf ?? '', prompt, content);
     } else {
       throw Exception('Invalid LLM choice');
     }
   }
 
-  Future<void> downloadModel(File modelFile) async {
-    final uri = Uri.https('huggingface.co',
-        'taide/Llama3-TAIDE-LX-8B-Chat-Alpha1-4bit/resolve/main/taide-8b-a.3-q4_k_m.gguf');
+  Future<void> downloadModel(
+      File modelFile, String huggingfaceToken, String huggingfaceGguf) async {
+    final uri = Uri.https('huggingface.co', huggingfaceGguf);
+    onStatusUpdateCallback?.call('Downloading $uri...');
     print('Downloading $uri...\n');
 
     var client = http.Client();
     final request = http.Request('GET', uri);
-    request.headers['Authorization'] =
-        'Bearer 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';
+    request.headers['Authorization'] = 'Bearer $huggingfaceToken';
     var response = await client.send(request);
 
     if (response.statusCode >= 300) {
       final responseBody = await response.stream.bytesToString();
+      onStatusUpdateCallback?.call('Failed to download file: $responseBody');
       throw Exception('Failed to download file: $responseBody');
     }
 
     var writer = modelFile.openWrite();
     await response.stream.pipe(writer);
     await writer.close();
+    onStatusUpdateCallback?.call(
+        'Downloaded ${modelFile.path} (${response.contentLength} bytes)\n');
     print('Download ${modelFile.path} (${response.contentLength} bytes)\n');
   }
 
-  Future<String> callLocalLlama(String prompt, String content) async {
-    File modelFile = File('${tempDir.path}/taide-8b-a.3-q4_k_m.gguf');
+  Future<String> callLocalLlama(String huggingfaceToken, String huggingfaceGguf,
+      String prompt, String content) async {
+    File modelFile = File('${tempDir.path}/llama.gguf');
     if (!await modelFile.exists()) {
-      await downloadModel(modelFile);
+      await downloadModel(modelFile, huggingfaceToken, huggingfaceGguf);
     }
 
+    onStatusUpdateCallback?.call('Running local llama...');
     var result = await _runCommand(
         llamaCliPath, ['-m', modelFile.path, '-p', '$content\n$prompt']);
     if (result.exitCode == 0) {
@@ -90,18 +105,28 @@ class LlmService {
 
   Future<ProcessResult> _runCommand(String command, List<String> args) async {
     print("\$ $command ${args.join(' ')}\n");
-    var process = await Process.start(command, args);
+    _currentProcess = await Process.start(command, args);
     var stdout = '';
     var stderr = '';
-    process.stderr.transform(utf8.decoder).forEach((line) {
+    _currentProcess!.stderr.transform(utf8.decoder).forEach((line) {
       stderr += line;
     });
-    process.stdout.transform(utf8.decoder).forEach((line) {
+    _currentProcess!.stdout.transform(utf8.decoder).forEach((line) {
       stdout += line;
     });
 
-    var exitCode = await process.exitCode;
-    return ProcessResult(process.pid, exitCode, stdout, stderr);
+    var exitCode = await _currentProcess!.exitCode;
+    return ProcessResult(_currentProcess!.pid, exitCode, stdout, stderr);
+  }
+
+  void killCurrentProcess() {
+    if (_currentProcess != null) {
+      _currentProcess!.kill();
+      _currentProcess = null;
+      print('Process terminated.');
+    } else {
+      print('No running process to terminate.');
+    }
   }
 
   Future<String> callCustomLlm(

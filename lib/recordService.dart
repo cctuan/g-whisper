@@ -132,6 +132,8 @@ class RecorderService {
 
   Future<void> startRecording() async {
     if (await _recorder.hasPermission()) {
+      llmService?.killCurrentProcess();
+      localWhisper?.killCurrentProcess();
       Directory? dir = await getTemporaryDirectory();
       String path = '${dir!.path}/record.m4a';
       await _recorder.start(
@@ -160,7 +162,8 @@ class RecorderService {
         if (settings?['use_openai_whisper'] == false) {
           print("Transcribing audio with local whisper...");
           text = await transcribeAudioLocal(path);
-          await localWhisper?.killCurrentProcess();
+          localWhisper?.killCurrentProcess();
+          llmService?.killCurrentProcess();
         } else {
           text = await transcribeAudioOpenAi(path);
         }
@@ -497,8 +500,12 @@ class RecorderService {
       customLlmModel: settings?['custom_llm_model'],
     );
 
-    String result = await llmService!.callLlm(prompt ?? '',
-        recordResult.originalText, settings?['llm_choice'], options);
+    String result = await llmService!.callLlm(
+        prompt ?? '',
+        recordResult.originalText,
+        settings?['llm_choice'],
+        options,
+        onStatusUpdateCallback);
 
     recordResult.processedText = result;
     setProcessing(false);
@@ -540,6 +547,15 @@ class RecorderService {
       return;
     }
 
+    if (settings?['llm_choice'] == 'llama_cpp' &&
+        (settings?['huggingface_gguf'] == null ||
+            settings?['huggingface_token'] == null)) {
+      print("Settings are not configured properly.");
+      onStatusUpdateCallback?.call("Llama Cpp is not setting properly.");
+      setProcessing(false);
+      return;
+    }
+
     int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
     PromptItem selectedPrompt = prompts[defaultPromptIndex];
 
@@ -557,11 +573,13 @@ class RecorderService {
       model: settings?['ollama_model'],
       customLlmUrl: settings?['custom_llm_url'],
       customLlmModel: settings?['custom_llm_model'],
+      huggingfaceToken: settings?['huggingface_token'],
+      huggingfaceGguf: settings?['huggingface_gguf'],
     );
     onStatusUpdateCallback?.call("Processing summary...");
 
-    String result = await llmService!
-        .callLlm(promptTemplate ?? '', content, 'local_llama', options);
+    String result = await llmService!.callLlm(promptTemplate ?? '', content,
+        settings?['llm_choice'], options, onStatusUpdateCallback);
 
     // Create a date-time stamp
     String formattedDate =
@@ -593,6 +611,7 @@ class RecorderService {
   }
 
   void dispose() {
+    llmService?.killCurrentProcess();
     localWhisper?.killCurrentProcess();
     _recorder.dispose();
   }

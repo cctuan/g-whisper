@@ -18,13 +18,17 @@ class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController customLlmUrlController = TextEditingController();
   final TextEditingController customLlmModelController =
       TextEditingController();
+  final TextEditingController huggingfaceTokenController =
+      TextEditingController();
+  final TextEditingController huggingfaceGgufController =
+      TextEditingController();
   String openAiModel = 'gpt-3.5-turbo'; // Default model
   String localWhisperModel = 'base'; // Default local whisper model
   final TextEditingController promptController = TextEditingController();
   List<PromptItem> prompts = [];
   int? defaultPromptIndex;
   bool useOpenAIWhisper = true; // true for OpenAI, false for Local Whisper
-  String llmChoice = 'openai'; // 'openai', 'ollama', 'custom'
+  String llmChoice = 'openai'; // 'openai', 'ollama', 'custom', 'llama_cpp'
 
   @override
   void initState() {
@@ -58,6 +62,8 @@ class _SettingsPageState extends State<SettingsPage> {
       ollamaModelController.text = settings['ollama_model'] ?? '';
       customLlmUrlController.text = settings['custom_llm_url'] ?? '';
       customLlmModelController.text = settings['custom_llm_model'] ?? '';
+      huggingfaceTokenController.text = settings['huggingface_token'] ?? '';
+      huggingfaceGgufController.text = settings['huggingface_gguf'] ?? '';
       prompts = settings['prompts'];
       useOpenAIWhisper = settings['use_openai_whisper'] ?? false;
       llmChoice = settings['llm_choice'] ?? 'openai';
@@ -67,17 +73,20 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> saveSettings() async {
     await settingsService.saveSettings(
-        openAiKeyController.text,
-        openAiModel,
-        ollamaUrlController.text,
-        ollamaModelController.text,
-        useOpenAIWhisper,
-        llmChoice,
-        localWhisperModel,
-        prompts,
-        defaultPromptIndex,
-        customLlmUrlController.text,
-        customLlmModelController.text);
+      openAiKeyController.text,
+      openAiModel,
+      ollamaUrlController.text,
+      ollamaModelController.text,
+      useOpenAIWhisper,
+      llmChoice,
+      localWhisperModel,
+      prompts,
+      defaultPromptIndex,
+      customLlmUrlController.text,
+      customLlmModelController.text,
+      huggingfaceTokenController.text,
+      huggingfaceGgufController.text,
+    );
     Navigator.pop(context);
   }
 
@@ -269,6 +278,34 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ],
+            ListTile(
+              title: const Text("Run LlamaCpp"),
+              leading: Radio<String>(
+                value: 'llama_cpp',
+                groupValue: llmChoice,
+                onChanged: (String? value) {
+                  setState(() {
+                    llmChoice = value!;
+                  });
+                },
+              ),
+            ),
+            if (llmChoice == 'llama_cpp') ...[
+              TextField(
+                controller: huggingfaceTokenController,
+                decoration: InputDecoration(
+                  labelText: 'Huggingface Token',
+                  helperText: 'Enter your Huggingface Token here',
+                ),
+              ),
+              TextField(
+                controller: huggingfaceGgufController,
+                decoration: InputDecoration(
+                  labelText: 'Huggingface GGUF',
+                  helperText: 'Enter the GGUF identifier here',
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             ListView.builder(
               shrinkWrap: true,
@@ -330,6 +367,8 @@ class _SettingsPageState extends State<SettingsPage> {
     ollamaModelController.dispose();
     customLlmUrlController.dispose();
     customLlmModelController.dispose();
+    huggingfaceTokenController.dispose();
+    huggingfaceGgufController.dispose();
     promptController.dispose();
     super.dispose();
   }

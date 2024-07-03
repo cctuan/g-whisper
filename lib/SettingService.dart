@@ -6,6 +6,7 @@ typedef SettingChangeCallback = void Function();
 
 class SettingsService {
   SettingChangeCallback? onSettingChanged;
+
   Future<Map<String, dynamic>> loadSettings() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     String openAiKey = prefs.getString('openai_key') ?? '';
@@ -23,6 +24,8 @@ class SettingsService {
     List<PromptItem> prompts = promptsJson
         .map((str) => PromptItem.fromJson(json.decode(str)))
         .toList();
+    String huggingfaceToken = prefs.getString('huggingface_token') ?? '';
+    String huggingfaceGguf = prefs.getString('huggingface_gguf') ?? '';
 
     return {
       'openai_model': openAiModel,
@@ -36,6 +39,8 @@ class SettingsService {
       'local_whisper_model': localWhisperModel,
       'prompts': prompts,
       'defaultPromptIndex': defaultPromptIndex,
+      'huggingface_token': huggingfaceToken,
+      'huggingface_gguf': huggingfaceGguf,
     };
   }
 
@@ -51,6 +56,8 @@ class SettingsService {
     int? defaultPromptIndex,
     String customLlmUrl,
     String customLlmModel,
+    String huggingfaceToken,
+    String huggingfaceGguf,
   ) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('openai_key', openAiKey);
@@ -62,6 +69,8 @@ class SettingsService {
     await prefs.setBool('use_openai_whisper', useOpenAIWhisper);
     await prefs.setString('llm_choice', llmChoice);
     await prefs.setString('local_whisper_model', localWhisperModel);
+    await prefs.setString('huggingface_token', huggingfaceToken);
+    await prefs.setString('huggingface_gguf', huggingfaceGguf);
     List<String> promptsJson =
         prompts.map((prompt) => json.encode(prompt.toJson())).toList();
     await prefs.setStringList('prompts', promptsJson);
