@@ -23,7 +23,7 @@ class AudioPart {
 }
 
 typedef RecordCompleteCallback = void Function(RecordResult result,
-    [int? index]);
+    [int? index, int? recordId]);
 typedef RecordAmplitudeChange = void Function(bool haVoice);
 typedef StatusUpdateCallback = void Function(String status);
 
@@ -135,7 +135,10 @@ class RecorderService {
       llmService?.killCurrentProcess();
       localWhisper?.killCurrentProcess();
       Directory? dir = await getTemporaryDirectory();
-      String path = '${dir!.path}/record.m4a';
+      String formattedDate =
+          DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+
+      String path = '${dir!.path}/record_$formattedDate.m4a';
       await _recorder.start(
         const RecordConfig(encoder: AudioEncoder.wav),
         path: path,
@@ -169,7 +172,7 @@ class RecorderService {
         }
         print(text);
         onStatusUpdateCallback?.call('Transcribed audio successfully.');
-        handleText(text);
+        handleText(text, path);
       } catch (e) {
         // Handle the error more specifically if you can
         if (e is SocketException) {
@@ -196,7 +199,7 @@ class RecorderService {
     setProcessing(false);
   }
 
-  Future<String> callWhisperApi(AudioPart part) async {
+  Future<String> callWhisperApi(AudioPart part, String? whisperPrompt) async {
     try {
       OpenAI.requestsTimeOut = Duration(minutes: 5);
       OpenAI.apiKey = settings?['openai_key'] ?? "";
@@ -204,6 +207,7 @@ class RecorderService {
           await OpenAI.instance.audio.createTranscription(
         file: part.file,
         model: "whisper-1",
+        prompt: whisperPrompt ?? '',
         responseFormat: OpenAIAudioResponseFormat.srt,
       );
       // 删除临时文件
@@ -216,7 +220,8 @@ class RecorderService {
     }
   }
 
-  Future<String> transcribeAudioOpenAi(String filePath) async {
+  Future<String> transcribeAudioOpenAi(String filePath,
+      [String? whisperPrompt]) async {
     try {
       onStatusUpdateCallback?.call("Transcribing audio with whisper...");
       File audioFile = File(filePath);
@@ -229,7 +234,8 @@ class RecorderService {
 
       List<String> transcriptions = [];
       List<Future<String>> transcriptionFutures = files.map((part) async {
-        String transcriptionText = await callWhisperApi(part);
+        String transcriptionText =
+            await callWhisperApi(part, whisperPrompt ?? '');
         return adjustTimestamps(transcriptionText, part.startTime, 0);
       }).toList();
 
@@ -254,7 +260,7 @@ class RecorderService {
       }
 
       // 删除临时文件
-      await audioFile.delete();
+      // await audioFile.delete();
 
       // 合併文本
       return transcriptions.join("\n");
@@ -279,7 +285,7 @@ class RecorderService {
       String srtContent = await File(outputSrtPath + '.srt').readAsString();
       // 删除临时文件
       await File(outputSrtPath + '.srt').delete();
-      await File(filePath).delete();
+      // await File(filePath).delete();
       return srtContent;
     } catch (e) {
       print("Error during local transcription: $e");
@@ -490,32 +496,19 @@ class RecorderService {
   void handleExistingPrompt(
       String prompt, RecordResult recordResult, int recordIndex) async {
     setProcessing(true);
-
-    LlmOptions options = LlmOptions(
-      apiKey: settings?['openai_key'],
-      openAiModel: settings?['openai_model'],
-      apiUrl: settings?['ollama_url'],
-      model: settings?['ollama_model'],
-      customLlmUrl: settings?['custom_llm_url'],
-      customLlmModel: settings?['custom_llm_model'],
-    );
-
-    String result = await llmService!.callLlm(
-        prompt ?? '',
-        recordResult.originalText,
-        settings?['llm_choice'],
-        options,
-        onStatusUpdateCallback);
-
-    recordResult.processedText = result;
-    setProcessing(false);
-    onRecordCompleteReturn?.call(recordResult, recordIndex);
+    await _processText(recordResult.originalText, recordResult.filePath,
+        recordIndex, prompt, recordResult.id);
   }
 
-  void handleText(String content) async {
+  void handleText(String content, String filePath) async {
     if (!isProcessing) {
       return;
     }
+    await _processText(content, filePath, null);
+  }
+
+  Future<void> _processText(String content, String? filePath,
+      [int? recordIndex, String? customPrompt, int? recordId]) async {
     List<PromptItem> prompts = settings?['prompts'] ?? [];
     if (prompts.isEmpty || settings == null) {
       print("Settings are not configured properly.");
@@ -557,10 +550,12 @@ class RecorderService {
     }
 
     int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
-    PromptItem selectedPrompt = prompts[defaultPromptIndex];
+    PromptItem selectedPrompt = customPrompt != null
+        ? PromptItem(prompt: customPrompt, name: "custom prompt")
+        : prompts[defaultPromptIndex];
 
     String promptTemplate = selectedPrompt.prompt;
-    if (defaultPromptIndex! >= prompts.length) {
+    if (defaultPromptIndex! >= prompts.length && customPrompt == null) {
       print("Settings are not configured properly.");
       setProcessing(false);
       onStatusUpdateCallback?.call("Settings are not configured properly.");
@@ -601,13 +596,59 @@ class RecorderService {
       originalText: content,
       processedText: result,
       timestamp: formattedDate,
+      filePath: filePath ?? '',
       promptText: promptTemplate,
     );
     setProcessing(false);
     onStatusUpdateCallback?.call("Summary processed successfully.");
-    onRecordCompleteReturn?.call(recordResult);
-    // Share the message
-    // Share.share(message);
+    onRecordCompleteReturn?.call(recordResult, recordIndex, recordId);
+  }
+
+  Future<void> rerun(RecordResult recordResult, int index) async {
+    setProcessing(true);
+    if (recordResult.filePath == null || recordResult.filePath!.isEmpty) {
+      print("The original record audio doesn't exist.");
+      onStatusUpdateCallback?.call("The original record audio doesn't exist.");
+      setProcessing(false);
+      return;
+    }
+    final file = File(recordResult.filePath!);
+    if (!await file.exists()) {
+      print("The original record audio doesn't exist.");
+      onStatusUpdateCallback?.call("The original record audio doesn't exist.");
+      setProcessing(false);
+      return;
+    }
+    try {
+      settings = await settingsService.loadSettings();
+      onStatusUpdateCallback?.call('Transcribing audio...');
+      String text;
+      if (settings?['use_openai_whisper'] == false) {
+        print("Transcribing audio with local whisper...");
+        text = await transcribeAudioLocal(recordResult.filePath!);
+        localWhisper?.killCurrentProcess();
+        llmService?.killCurrentProcess();
+      } else {
+        text = await transcribeAudioOpenAi(
+            recordResult.filePath!, recordResult.whisperPrompt);
+      }
+      print(text);
+      onStatusUpdateCallback?.call('Transcribed audio successfully.');
+      await _processText(text, recordResult.filePath, index,
+          recordResult.promptText, recordResult.id);
+    } catch (e) {
+      // Handle the error more specifically if you can
+      if (e is SocketException) {
+        print(
+            "Network issue when sending audio for transcription: ${e.message}");
+        onStatusUpdateCallback?.call(
+            "Network issue when sending audio for transcription: ${e.message}");
+      } else {
+        print("Failed to transcribe audio: $e");
+        onStatusUpdateCallback?.call("Failed to transcribe audio: $e");
+      }
+      setProcessing(false);
+    }
   }
 
   void dispose() {

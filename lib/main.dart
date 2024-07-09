@@ -69,16 +69,18 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     await _recorderService.init();
     setState(() => {});
     _recorderService.onRecordCompleteReturn =
-        (RecordResult result, [int? index]) async {
+        (RecordResult result, [int? index, int? id]) async {
       // 在这里处理录音完成后的逻辑
       if (index != null && index >= 0 && index < recordLogs.length) {
-        DatabaseHelper().updateRecording(result);
+        DatabaseHelper().updateRecording(result, id);
+
         setState(() {
           recordLogs[index] = result; // Replace the existing entry at the index
           hideMessage();
         });
       } else {
         final newRecord = await DatabaseHelper().insertRecording(result);
+        print('newRecord: ${newRecord.id}');
         setState(() {
           recordLogs.insert(0, newRecord); // Insert new record at the beginning
           hideMessage();
@@ -254,6 +256,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   void deleteRecording(int index) {
     RecordResult record = recordLogs[index];
     recordLogs.removeAt(index);
+    print('Delete Recording Id - ${record.id}');
     DatabaseHelper().deleteRecording(record.id!);
     setState(() {});
   }
@@ -273,6 +276,19 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     // 保存逻辑，可能是更新状态、发送到服务器等
     print(
         'Saved: Original Text = ${recordResult.originalText}, Processed Text = ${recordResult.processedText}');
+  }
+
+  void saveWhisperPrompt(RecordResult recordResult, int index) {
+    recordLogs[index].whisperPrompt = recordResult.whisperPrompt;
+    DatabaseHelper().updateRecording(recordLogs[index]);
+    _recorderService.rerun(recordResult, index);
+    setState(() {});
+    // _recorderService.rerun(
+    //     whisperPrompt,
+    //     recordResult.promptText,
+    //     recordResult,
+    //     index);
+    print('Saved: whisperPrompt = ${recordResult.whisperPrompt}');
   }
 
   void editRecording(RecordResult recordResult, int index) {
@@ -465,7 +481,11 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                             TextEditingController processedTextController =
                                 TextEditingController(
                                     text: recordResult.processedText);
+                            TextEditingController whisperPromptController =
+                                TextEditingController(
+                                    text: recordResult.whisperPrompt);
                             FocusNode processedTextFocusNode = FocusNode();
+                            FocusNode whisperPromptFocusNode = FocusNode();
 
                             // 添加焦点监听器
                             originalTextFocusNode.addListener(() {
@@ -485,6 +505,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                 saveRecordResult(recordResult, index);
                               }
                             });
+
                             return Card(
                               elevation: 4.0,
                               margin: EdgeInsets.symmetric(
@@ -544,12 +565,46 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                                     selectedPrompt,
                                                     recordResult,
                                                     index);
-                                            // print(selectedPrompt);
-                                            // recordResult.promptText = selectedPrompt;
-                                            // // Optionally trigger processing with the new prompt
-                                            // _recorderService.reprocessRecord(record, selectedPrompt);
                                           });
                                         }),
+                                        if (recordResult.filePath != null &&
+                                            recordResult.filePath!.isNotEmpty)
+                                          ListTile(
+                                            title: const Text(
+                                              '專有詞修正（Optional)',
+                                              style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.black87),
+                                            ),
+                                            subtitle: TextField(
+                                              controller:
+                                                  whisperPromptController,
+                                              focusNode: whisperPromptFocusNode,
+                                              style: TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 16),
+                                              cursorColor: Colors.blue,
+                                              decoration: InputDecoration(
+                                                border:
+                                                    OutlineInputBorder(), // Use an outline border
+                                                hintText: 'ex: LIAM HUB, IAM',
+                                              ),
+                                              maxLines: null,
+                                            ),
+                                            trailing: IconButton(
+                                              icon: Icon(Icons.refresh),
+                                              onPressed: () {
+                                                String whisperPrompt =
+                                                    whisperPromptController
+                                                        .text;
+                                                recordResult.whisperPrompt =
+                                                    whisperPrompt;
+                                                saveWhisperPrompt(
+                                                    recordResult, index);
+                                              },
+                                            ),
+                                          ),
                                         ListTile(
                                           title: const Text(
                                             'AI整理檔案（可編輯）',
@@ -676,8 +731,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
 Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
     Function(String) onSelected) {
-  print(currentPrompt);
-  print(prompts);
+  // print(currentPrompt);
+  // print(prompts);
 
   // Handle case when prompts are empty
   if (prompts.isEmpty) {

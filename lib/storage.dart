@@ -25,7 +25,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Incremented database version
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE recordings(
@@ -33,9 +33,21 @@ class DatabaseHelper {
             timestamp TEXT,
             originalText TEXT,
             processedText TEXT,
-            promptText TEXT
+            promptText TEXT,
+            whisperPrompt TEXT,
+            filePath TEXT
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            ALTER TABLE recordings ADD COLUMN whisperPrompt TEXT;
+          ''');
+          await db.execute('''
+            ALTER TABLE recordings ADD COLUMN filePath TEXT;
+          ''');
+        }
       },
     );
   }
@@ -56,23 +68,60 @@ class DatabaseHelper {
     return RecordResult.fromJson(result);
   }
 
-  Future<void> updateRecording(RecordResult record) async {
+  Future<void> updateRecording(RecordResult record, [int? id]) async {
     final db = await database;
-    await db.update(
-      'recordings',
-      record.toJson(),
-      where: 'id = ?',
-      whereArgs: [record.id],
-    );
+    final recordId = record.id ?? id;
+    print('Updating record with id: $recordId');
+    if (recordId == null) {
+      throw ArgumentError("Either record.id or id must be provided");
+    }
+
+    if (record.id == null) {
+      record.id = id;
+    }
+    try {
+      await db.update(
+        'recordings',
+        record.toJson(),
+        where: 'id = ?',
+        whereArgs: [recordId],
+      );
+      print("Record updated successfully");
+    } catch (e) {
+      print("Failed to update record: $e");
+      rethrow;
+    }
   }
 
   Future<void> deleteRecording(int id) async {
     final db = await database;
-    await db.delete(
+
+    // Retrieve the recording to get the filePath
+    final List<Map<String, dynamic>> result = await db.query(
       'recordings',
       where: 'id = ?',
       whereArgs: [id],
+      limit: 1,
     );
+
+    if (result.isNotEmpty) {
+      final RecordResult record = RecordResult.fromJson(result.first);
+
+      // Check if the file exists and delete it
+      if (record.filePath != null && record.filePath!.isNotEmpty) {
+        final file = File(record.filePath!);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
+
+      // Delete the record from the database
+      await db.delete(
+        'recordings',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
   }
 
   Future<List<RecordResult>> getRecordings() async {
