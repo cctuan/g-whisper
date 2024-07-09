@@ -80,7 +80,6 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
         });
       } else {
         final newRecord = await DatabaseHelper().insertRecording(result);
-        print('newRecord: ${newRecord.id}');
         setState(() {
           recordLogs.insert(0, newRecord); // Insert new record at the beginning
           hideMessage();
@@ -278,16 +277,10 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
         'Saved: Original Text = ${recordResult.originalText}, Processed Text = ${recordResult.processedText}');
   }
 
-  void saveWhisperPrompt(RecordResult recordResult, int index) {
-    recordLogs[index].whisperPrompt = recordResult.whisperPrompt;
-    DatabaseHelper().updateRecording(recordLogs[index]);
+  void saveWhisperPrompt(RecordResult recordResult, int index) async {
+    await DatabaseHelper().updateRecording(recordResult);
     _recorderService.rerun(recordResult, index);
     setState(() {});
-    // _recorderService.rerun(
-    //     whisperPrompt,
-    //     recordResult.promptText,
-    //     recordResult,
-    //     index);
     print('Saved: whisperPrompt = ${recordResult.whisperPrompt}');
   }
 
@@ -485,7 +478,6 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                 TextEditingController(
                                     text: recordResult.whisperPrompt);
                             FocusNode processedTextFocusNode = FocusNode();
-                            FocusNode whisperPromptFocusNode = FocusNode();
 
                             // 添加焦点监听器
                             originalTextFocusNode.addListener(() {
@@ -580,7 +572,6 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                             subtitle: TextField(
                                               controller:
                                                   whisperPromptController,
-                                              focusNode: whisperPromptFocusNode,
                                               style: TextStyle(
                                                   color: Colors.black,
                                                   fontSize: 16),

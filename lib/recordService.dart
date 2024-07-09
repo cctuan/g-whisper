@@ -508,7 +508,10 @@ class RecorderService {
   }
 
   Future<void> _processText(String content, String? filePath,
-      [int? recordIndex, String? customPrompt, int? recordId]) async {
+      [int? recordIndex,
+      String? customPrompt,
+      int? recordId,
+      String? whisperPrompt]) async {
     List<PromptItem> prompts = settings?['prompts'] ?? [];
     if (prompts.isEmpty || settings == null) {
       print("Settings are not configured properly.");
@@ -598,6 +601,7 @@ class RecorderService {
       timestamp: formattedDate,
       filePath: filePath ?? '',
       promptText: promptTemplate,
+      whisperPrompt: whisperPrompt ?? '',
     );
     setProcessing(false);
     onStatusUpdateCallback?.call("Summary processed successfully.");
@@ -635,7 +639,7 @@ class RecorderService {
       print(text);
       onStatusUpdateCallback?.call('Transcribed audio successfully.');
       await _processText(text, recordResult.filePath, index,
-          recordResult.promptText, recordResult.id);
+          recordResult.promptText, recordResult.id, recordResult.whisperPrompt);
     } catch (e) {
       // Handle the error more specifically if you can
       if (e is SocketException) {
