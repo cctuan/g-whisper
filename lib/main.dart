@@ -27,7 +27,7 @@ void main() async {
   await hotKeyManager.unregisterAll();
   List<RecordResult> recordLogs = await DatabaseHelper().getRecordings();
 
-  runApp(MyApp(title: 'G Whisper', initialRecordLogs: recordLogs));
+  runApp(MyApp(title: 'G Whisper dev-0.1', initialRecordLogs: recordLogs));
   // await hotKeyManager.unregisterAll();
 }
 

@@ -172,7 +172,11 @@ class RecorderService {
         }
         print(text);
         onStatusUpdateCallback?.call('Transcribed audio successfully.');
-        handleText(text, path);
+        if (settings?['store_original_audio'] == false) {
+          handleText(text, '');
+        } else {
+          handleText(text, path);
+        }
       } catch (e) {
         // Handle the error more specifically if you can
         if (e is SocketException) {
@@ -269,7 +273,9 @@ class RecorderService {
       }
 
       // 删除临时文件
-      // await audioFile.delete();
+      if (settings?['store_original_audio'] == false) {
+        await audioFile.delete();
+      }
 
       // 合併文本
       return transcriptions.join("\n");

@@ -27,6 +27,7 @@ class SettingsService {
     String huggingfaceToken = prefs.getString('huggingface_token') ?? '';
     String huggingfaceGguf = prefs.getString('huggingface_gguf') ?? '';
     String whisperPrompt = prefs.getString('whisper_prompt') ?? '';
+    bool storeOriginalAudio = prefs.getBool('store_original_audio') ?? false;
 
     return {
       'openai_model': openAiModel,
@@ -43,6 +44,7 @@ class SettingsService {
       'huggingface_token': huggingfaceToken,
       'huggingface_gguf': huggingfaceGguf,
       'whisper_prompt': whisperPrompt,
+      'store_original_audio': storeOriginalAudio,
     };
   }
 
@@ -61,6 +63,7 @@ class SettingsService {
     String huggingfaceToken,
     String huggingfaceGguf,
     String whisperPrompt,
+    bool? storeOriginalAudio,
   ) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('openai_key', openAiKey);
@@ -75,6 +78,7 @@ class SettingsService {
     await prefs.setString('huggingface_token', huggingfaceToken);
     await prefs.setString('huggingface_gguf', huggingfaceGguf);
     await prefs.setString('whisper_prompt', whisperPrompt);
+    await prefs.setBool('store_original_audio', storeOriginalAudio ?? false);
     List<String> promptsJson =
         prompts.map((prompt) => json.encode(prompt.toJson())).toList();
     await prefs.setStringList('prompts', promptsJson);

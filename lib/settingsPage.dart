@@ -29,6 +29,7 @@ class _SettingsPageState extends State<SettingsPage> {
   List<PromptItem> prompts = [];
   int? defaultPromptIndex;
   bool useOpenAIWhisper = true; // true for OpenAI, false for Local Whisper
+  bool storeOriginalAudio = false;
   String llmChoice = 'openai'; // 'openai', 'ollama', 'custom', 'llama_cpp'
 
   @override
@@ -70,6 +71,7 @@ class _SettingsPageState extends State<SettingsPage> {
       useOpenAIWhisper = settings['use_openai_whisper'] ?? false;
       llmChoice = settings['llm_choice'] ?? 'openai';
       defaultPromptIndex = settings['defaultPromptIndex'] ?? 0;
+      storeOriginalAudio = settings['store_original_audio'] ?? false;
     });
   }
 
@@ -89,6 +91,7 @@ class _SettingsPageState extends State<SettingsPage> {
       huggingfaceTokenController.text,
       huggingfaceGgufController.text,
       whisperPromptController.text,
+      storeOriginalAudio,
     );
     Navigator.pop(context);
   }
@@ -177,6 +180,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             if (useOpenAIWhisper) ...[
               TextField(
+                obscureText: true,
                 controller: openAiKeyController,
                 decoration: InputDecoration(
                   labelText: 'OpenAI API Key',
@@ -203,6 +207,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             if (llmChoice == 'openai') ...[
               TextField(
+                obscureText: true,
                 controller: openAiKeyController,
                 decoration: InputDecoration(
                   labelText: 'OpenAI API Key',
@@ -311,17 +316,35 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
             const SizedBox(height: 20),
             Text(
-              "Whisper Prompt",
+              "Uncommon Nouns",
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             TextField(
               controller: whisperPromptController,
               decoration: InputDecoration(
-                labelText: 'Whisper Prompt',
-                helperText: 'Enter your Whisper Prompt here',
+                labelText: 'Uncommon Nouns',
+                helperText: 'Enter uncommon nouns here to prevent misspellings',
               ),
             ),
             const SizedBox(height: 20),
+            Text(
+              "File Settings",
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            SwitchListTile(
+              title: const Text("Preserve Original Audio File"),
+              value: storeOriginalAudio,
+              onChanged: (bool value) {
+                setState(() {
+                  storeOriginalAudio = value;
+                });
+              },
+            ),
+            const SizedBox(height: 20),
+            Text(
+              "Prompt Settings",
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
             ListView.builder(
               shrinkWrap: true,
               physics: NeverScrollableScrollPhysics(),
