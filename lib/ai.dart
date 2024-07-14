@@ -194,8 +194,8 @@ class LlmService {
     final docs = textSplitter.createDocuments(texts);
     Ollama llm = Ollama(
       baseUrl: apiUrl,
-      defaultOptions: const OllamaOptions(
-        model: 'llama3',
+      defaultOptions: OllamaOptions(
+        model: model,
       ),
     );
     if (content.length <= chunkSize) {

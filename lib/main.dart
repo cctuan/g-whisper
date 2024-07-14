@@ -563,7 +563,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                             recordResult.filePath!.isNotEmpty)
                                           ListTile(
                                             title: const Text(
-                                              '專有詞修正（Optional)',
+                                              '專有詞修正（Optional -  會覆蓋 default settings)',
                                               style: TextStyle(
                                                   fontSize: 15,
                                                   fontWeight: FontWeight.bold,
@@ -722,9 +722,6 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
 Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
     Function(String) onSelected) {
-  // print(currentPrompt);
-  // print(prompts);
-
   // Handle case when prompts are empty
   if (prompts.isEmpty) {
     currentPrompt = null;
@@ -737,45 +734,28 @@ Widget buildPromptDropdown(String? currentPrompt, List<PromptItem> prompts,
     }
   }
 
-  // Filter out duplicates if currentPrompt is not null
-  List<PromptItem> filteredPrompts = currentPrompt != null
-      ? prompts.where((PromptItem prompt) {
-          return prompt.prompt != currentPrompt;
-        }).toList()
-      : prompts;
-
-  // Add the currentPrompt back to the list if it's not null
-  if (currentPrompt != null) {
-    filteredPrompts.insert(
-        0, PromptItem(name: currentPrompt, prompt: currentPrompt));
-  }
-
-  return DropdownButton<String>(
-    value: currentPrompt,
-    onChanged: (newValue) {
-      if (newValue != null && newValue != 'Select a prompt...') {
-        onSelected(newValue);
+  return DropdownMenu<PromptItem>(
+    initialSelection: currentPrompt != null
+        ? prompts
+            .firstWhere((PromptItem prompt) => prompt.prompt == currentPrompt)
+        : null,
+    onSelected: (PromptItem? newValue) {
+      if (newValue != null) {
+        onSelected(newValue.prompt);
       }
     },
-    items: [
-      DropdownMenuItem<String>(
-        value: 'Select a prompt...', // Default non-selectable item
-        child: Text('Select a prompt...'),
+    dropdownMenuEntries: [
+      DropdownMenuEntry<PromptItem>(
+        value: PromptItem(name: 'Select a prompt...', prompt: ''),
+        label: 'Select a prompt...', // Default non-selectable item
         enabled: false, // Make it non-selectable
       ),
-      if (filteredPrompts.isNotEmpty)
-        ...filteredPrompts.map((PromptItem prompt) {
-          return DropdownMenuItem<String>(
-            value: prompt.prompt,
-            child: Text(prompt.name),
-          );
-        }).toList()
-      else
-        DropdownMenuItem<String>(
-          value: null, // Use null to indicate no selection
-          child: Text('No prompts available'),
-          enabled: false, // Make it non-selectable
-        ),
+      ...prompts.map((PromptItem prompt) {
+        return DropdownMenuEntry<PromptItem>(
+          value: prompt,
+          label: prompt.name,
+        );
+      }).toList()
     ],
   );
 }

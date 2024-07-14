@@ -22,6 +22,7 @@ class _SettingsPageState extends State<SettingsPage> {
       TextEditingController();
   final TextEditingController huggingfaceGgufController =
       TextEditingController();
+  final TextEditingController whisperPromptController = TextEditingController();
   String openAiModel = 'gpt-3.5-turbo'; // Default model
   String localWhisperModel = 'base'; // Default local whisper model
   final TextEditingController promptController = TextEditingController();
@@ -64,6 +65,7 @@ class _SettingsPageState extends State<SettingsPage> {
       customLlmModelController.text = settings['custom_llm_model'] ?? '';
       huggingfaceTokenController.text = settings['huggingface_token'] ?? '';
       huggingfaceGgufController.text = settings['huggingface_gguf'] ?? '';
+      whisperPromptController.text = settings['whisper_prompt'] ?? '';
       prompts = settings['prompts'];
       useOpenAIWhisper = settings['use_openai_whisper'] ?? false;
       llmChoice = settings['llm_choice'] ?? 'openai';
@@ -86,6 +88,7 @@ class _SettingsPageState extends State<SettingsPage> {
       customLlmModelController.text,
       huggingfaceTokenController.text,
       huggingfaceGgufController.text,
+      whisperPromptController.text,
     );
     Navigator.pop(context);
   }
@@ -306,7 +309,19 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ],
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
+            Text(
+              "Whisper Prompt",
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            TextField(
+              controller: whisperPromptController,
+              decoration: InputDecoration(
+                labelText: 'Whisper Prompt',
+                helperText: 'Enter your Whisper Prompt here',
+              ),
+            ),
+            const SizedBox(height: 20),
             ListView.builder(
               shrinkWrap: true,
               physics: NeverScrollableScrollPhysics(),
@@ -369,6 +384,7 @@ class _SettingsPageState extends State<SettingsPage> {
     customLlmModelController.dispose();
     huggingfaceTokenController.dispose();
     huggingfaceGgufController.dispose();
+    whisperPromptController.dispose();
     promptController.dispose();
     super.dispose();
   }

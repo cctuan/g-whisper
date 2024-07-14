@@ -201,13 +201,22 @@ class RecorderService {
 
   Future<String> callWhisperApi(AudioPart part, String? whisperPrompt) async {
     try {
+      String prompt;
+      if (whisperPrompt != null && whisperPrompt.isNotEmpty) {
+        prompt = whisperPrompt;
+      } else if (settings?['whisper_prompt'] != null &&
+          settings?['whisper_prompt'].isNotEmpty) {
+        prompt = settings?['whisper_prompt'];
+      } else {
+        prompt = "";
+      }
       OpenAI.requestsTimeOut = Duration(minutes: 5);
       OpenAI.apiKey = settings?['openai_key'] ?? "";
       OpenAIAudioModel transcription =
           await OpenAI.instance.audio.createTranscription(
         file: part.file,
         model: "whisper-1",
-        prompt: whisperPrompt ?? '',
+        prompt: prompt,
         responseFormat: OpenAIAudioResponseFormat.srt,
       );
       // 删除临时文件

@@ -26,6 +26,7 @@ class SettingsService {
         .toList();
     String huggingfaceToken = prefs.getString('huggingface_token') ?? '';
     String huggingfaceGguf = prefs.getString('huggingface_gguf') ?? '';
+    String whisperPrompt = prefs.getString('whisper_prompt') ?? '';
 
     return {
       'openai_model': openAiModel,
@@ -41,6 +42,7 @@ class SettingsService {
       'defaultPromptIndex': defaultPromptIndex,
       'huggingface_token': huggingfaceToken,
       'huggingface_gguf': huggingfaceGguf,
+      'whisper_prompt': whisperPrompt,
     };
   }
 
@@ -58,6 +60,7 @@ class SettingsService {
     String customLlmModel,
     String huggingfaceToken,
     String huggingfaceGguf,
+    String whisperPrompt,
   ) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('openai_key', openAiKey);
@@ -71,6 +74,7 @@ class SettingsService {
     await prefs.setString('local_whisper_model', localWhisperModel);
     await prefs.setString('huggingface_token', huggingfaceToken);
     await prefs.setString('huggingface_gguf', huggingfaceGguf);
+    await prefs.setString('whisper_prompt', whisperPrompt);
     List<String> promptsJson =
         prompts.map((prompt) => json.encode(prompt.toJson())).toList();
     await prefs.setStringList('prompts', promptsJson);
