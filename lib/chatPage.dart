@@ -56,8 +56,11 @@ class ChatPage extends StatefulWidget {
   static const String routeName = '/chat';
 
   final List<RecordResult> recordLogs;
+  final String initialText;
 
-  const ChatPage({Key? key, required this.recordLogs}) : super(key: key);
+  const ChatPage(
+      {Key? key, required this.recordLogs, required this.initialText})
+      : super(key: key);
 
   @override
   _ChatPageState createState() => _ChatPageState();
@@ -95,7 +98,7 @@ class _ChatPageState extends State<ChatPage> {
       author: _ai,
       createdAt: DateTime.now().millisecondsSinceEpoch,
       id: Random().nextInt(100000).toString(),
-      text: "Feel free to ask G whisper anything!",
+      text: widget.initialText,
     );
     _messages.insert(0, textMessage);
   }

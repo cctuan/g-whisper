@@ -221,7 +221,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     ));
   }
 
-  Future<void> showChatPage(List<RecordResult> recordLogs) async {
+  Future<void> showChatPage(
+      List<RecordResult> recordLogs, String initialText) async {
     if (navigatorKey.currentState == null) return;
 
     var currentRoute = ModalRoute.of(navigatorKey.currentContext!);
@@ -234,7 +235,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
     // 推送 ChatPage 到 Navigator
     navigatorKey.currentState!.push(MaterialPageRoute(
-      builder: (context) => ChatPage(recordLogs: recordLogs),
+      builder: (context) =>
+          ChatPage(recordLogs: recordLogs, initialText: initialText),
       settings: RouteSettings(name: ChatPage.routeName),
     ));
   }
@@ -341,7 +343,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                 icon: Icon(Icons.chat),
                 onPressed: () {
                   if (!isSettingsDialogOpen) {
-                    showChatPage(recordLogs);
+                    showChatPage(recordLogs,
+                        "Ask anything with your past chat logs, example - Any meeting mentioned about Meeting Noter?");
                   }
                 },
               ),
@@ -656,7 +659,9 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                         icon: Icon(Icons.chat),
                                         onPressed: () {
                                           // Navigate to chat page with the current record
-                                          showChatPage([recordResult]);
+                                          showChatPage([
+                                            recordResult
+                                          ], "${recordResult.processedText.substring(0, 100)}... \n\n\n Ask anything detail about this meeting");
                                         },
                                       ),
                                       IconButton(
@@ -706,7 +711,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
               ]))),
       routes: {
         SettingsPage.routeName: (context) => const SettingsPage(),
-        ChatPage.routeName: (context) => ChatPage(recordLogs: recordLogs),
+        ChatPage.routeName: (context) =>
+            ChatPage(recordLogs: recordLogs, initialText: ''),
       },
     );
   }
