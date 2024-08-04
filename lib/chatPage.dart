@@ -84,7 +84,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> loadSettings() async {
     var settings = await settingsService.loadSettings();
     conversationalQA = ConversationalQA(
-      openaiApiKey: settings['openai_key'],
+      settings: settings,
       recordLogs: widget.recordLogs,
     );
     await conversationalQA.init();

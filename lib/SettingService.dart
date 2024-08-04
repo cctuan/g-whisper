@@ -28,6 +28,9 @@ class SettingsService {
     String huggingfaceGguf = prefs.getString('huggingface_gguf') ?? '';
     String whisperPrompt = prefs.getString('whisper_prompt') ?? '';
     bool storeOriginalAudio = prefs.getBool('store_original_audio') ?? false;
+    String openaiCompletionBaseUrl =
+        prefs.getString('openai_completion_base_url') ?? '';
+    String openaiAudioBaseUrl = prefs.getString('openai_audio_base_url') ?? '';
 
     return {
       'openai_model': openAiModel,
@@ -45,6 +48,8 @@ class SettingsService {
       'huggingface_gguf': huggingfaceGguf,
       'whisper_prompt': whisperPrompt,
       'store_original_audio': storeOriginalAudio,
+      'openai_completion_base_url': openaiCompletionBaseUrl,
+      'openai_audio_base_url': openaiAudioBaseUrl,
     };
   }
 
@@ -64,6 +69,8 @@ class SettingsService {
     String huggingfaceGguf,
     String whisperPrompt,
     bool? storeOriginalAudio,
+    String? openaiCompletionBaseUrl,
+    String? openaiAudioBaseUrl,
   ) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('openai_key', openAiKey);
@@ -79,6 +86,9 @@ class SettingsService {
     await prefs.setString('huggingface_gguf', huggingfaceGguf);
     await prefs.setString('whisper_prompt', whisperPrompt);
     await prefs.setBool('store_original_audio', storeOriginalAudio ?? false);
+    await prefs.setString(
+        'openai_completion_base_url', openaiCompletionBaseUrl ?? '');
+    await prefs.setString('openai_audio_base_url', openaiAudioBaseUrl ?? '');
     List<String> promptsJson =
         prompts.map((prompt) => json.encode(prompt.toJson())).toList();
     await prefs.setStringList('prompts', promptsJson);

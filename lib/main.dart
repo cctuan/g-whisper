@@ -27,7 +27,7 @@ void main() async {
   await hotKeyManager.unregisterAll();
   List<RecordResult> recordLogs = await DatabaseHelper().getRecordings();
 
-  runApp(MyApp(title: 'G Whisper dev-0.1', initialRecordLogs: recordLogs));
+  runApp(MyApp(title: 'G Whisper dev-0.1.2', initialRecordLogs: recordLogs));
   // await hotKeyManager.unregisterAll();
 }
 
@@ -47,18 +47,27 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   bool isSettingsDialogOpen =
       false; // Flag to track if the settings dialog is open
   List<RecordResult> recordLogs = []; // 存储录音记录的列表
+  List<MapEntry<int, RecordResult>> filteredRecordLogs = []; // 存储过滤后的录音记录的列表
+
   bool hasVoice = false;
   bool isDragging = false;
+  String searchKeyword = '';
+  bool isSearchBarVisible = false;
+
+  late TextEditingController searchController;
+
   ValueNotifier<String?> messageNotifier = ValueNotifier<String?>(null);
 
   @override
   void initState() {
     super.initState();
+    searchController = TextEditingController(text: searchKeyword);
     _initializeRecorderService();
   }
 
   Future<void> _initializeRecorderService() async {
     recordLogs = widget.initialRecordLogs;
+    filteredRecordLogs = recordLogs.asMap().entries.toList();
     _recorderService = RecorderService();
     _recorderService.onRecordingStateChanged = () {
       setState(() {
@@ -85,6 +94,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
           hideMessage();
         });
       }
+      _filterRecords(); // 更新过滤结果
     };
     _recorderService.onAmplitudeChange = (bool voicePresent) {
       hasVoice = voicePresent;
@@ -254,9 +264,10 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     });
   }
 
-  void deleteRecording(int index) {
-    RecordResult record = recordLogs[index];
-    recordLogs.removeAt(index);
+  void deleteRecording(int originalIndex) {
+    RecordResult record = recordLogs[originalIndex];
+    recordLogs.removeAt(originalIndex);
+    _filterRecords();
     print('Delete Recording Id - ${record.id}');
     DatabaseHelper().deleteRecording(record.id!);
     setState(() {});
@@ -268,25 +279,26 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     Share.share(content);
   }
 
-  void saveRecordResult(RecordResult recordResult, int index) {
+  void saveRecordResult(RecordResult recordResult, int originalIndex) {
     setState(() {
-      recordLogs[index].originalText = recordResult.originalText;
-      recordLogs[index].processedText = recordResult.processedText;
-      DatabaseHelper().updateRecording(recordLogs[index]);
+      recordLogs[originalIndex].originalText = recordResult.originalText;
+      recordLogs[originalIndex].processedText = recordResult.processedText;
+      DatabaseHelper().updateRecording(recordLogs[originalIndex]);
     });
+    _filterRecords();
     // 保存逻辑，可能是更新状态、发送到服务器等
     print(
         'Saved: Original Text = ${recordResult.originalText}, Processed Text = ${recordResult.processedText}');
   }
 
-  void saveWhisperPrompt(RecordResult recordResult, int index) async {
+  void saveWhisperPrompt(RecordResult recordResult, int originalIndex) async {
     await DatabaseHelper().updateRecording(recordResult);
-    _recorderService.rerun(recordResult, index);
+    _recorderService.rerun(recordResult, originalIndex);
     setState(() {});
     print('Saved: whisperPrompt = ${recordResult.whisperPrompt}');
   }
 
-  void editRecording(RecordResult recordResult, int index) {
+  void editRecording(RecordResult recordResult, int originalIndex) {
     BuildContext context = navigatorKey.currentState!.overlay!.context;
     TextEditingController textEditingController =
         TextEditingController(text: recordResult.originalText);
@@ -307,10 +319,12 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
               onPressed: () {
                 // Update the logic here to save the edited text
                 setState(() {
-                  recordLogs[index].originalText = textEditingController.text;
-                  DatabaseHelper().updateRecording(recordLogs[index]);
+                  recordLogs[originalIndex].originalText =
+                      textEditingController.text;
+                  DatabaseHelper().updateRecording(recordLogs[originalIndex]);
                 });
                 Navigator.of(context).pop(); // Close the dialog
+                _filterRecords();
               },
             ),
             TextButton(
@@ -325,396 +339,484 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     );
   }
 
+  void _filterRecords() {
+    setState(() {
+      if (searchKeyword.isEmpty) {
+        filteredRecordLogs = recordLogs.asMap().entries.toList();
+      } else {
+        filteredRecordLogs = recordLogs
+            .asMap()
+            .entries
+            .where((entry) =>
+                entry.value.originalText.contains(searchKeyword) ||
+                entry.value.processedText.contains(searchKeyword))
+            .toList();
+      }
+    });
+  }
+
+  void toggleSearchBar() {
+    setState(() {
+      isSearchBarVisible = !isSearchBarVisible;
+      if (isSearchBarVisible) {
+        searchController.text = searchKeyword;
+      }
+    });
+  }
+
+  void hideSearchBar() {
+    setState(() {
+      isSearchBarVisible = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      title: 'Flutter Audio Recorder',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      scaffoldMessengerKey: _scaffoldMessengerKey,
-      home: Scaffold(
-          appBar: AppBar(
-            title: Text(widget.title),
-            actions: [
-              IconButton(
-                icon: Icon(Icons.chat),
-                onPressed: () {
-                  if (!isSettingsDialogOpen) {
-                    showChatPage(recordLogs,
-                        "Ask anything with your past chat logs, example - Any meeting mentioned about Meeting Noter?");
-                  }
-                },
-              ),
-              IconButton(
-                icon: Icon(Icons.settings),
-                onPressed: () {
-                  if (!isSettingsDialogOpen) {
-                    showSettingsDialog();
-                  }
-                },
-              ),
-            ],
+    return GestureDetector(
+        onTap: hideSearchBar,
+        child: MaterialApp(
+          navigatorKey: navigatorKey,
+          title: 'Flutter Audio Recorder',
+          theme: ThemeData(
+            primarySwatch: Colors.blue,
+            useMaterial3: true,
           ),
-          body: DropTarget(
-              onDragEntered: (details) {
-                setState(() {
-                  isDragging = true;
-                });
-              },
-              onDragExited: (details) {
-                setState(() {
-                  isDragging = false;
-                });
-              },
-              onDragDone: (details) {
-                setState(() {
-                  isDragging = false;
-                });
-                if (details.files.isNotEmpty) {
-                  String filePath = details.files.first.path;
-                  if (filePath.endsWith('.wav') ||
-                      filePath.endsWith('.mp3') ||
-                      filePath.endsWith('.mov') ||
-                      filePath.endsWith('.m4a')) {
-                    _recorderService.stopRecording(details.files.first.path);
-                  } else {
-                    // Show a message to the user indicating the file format is not supported
-                    _scaffoldMessengerKey.currentState?.showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              'Unsupported file format. Please use WAV, MP3, mov or m4a.')),
-                    );
-                  }
-                }
-              },
-              child: Stack(children: [
-                Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Text(
-                        _recorderService.isRecording
-                            ? 'Recording in Progress'
-                            : 'Press the mic to start recording or option + w',
-                      ),
-                      Text(
-                        _recorderService.recordedFilePath ??
-                            'No file recorded yet',
-                      ),
-                      Column(
+          scaffoldMessengerKey: _scaffoldMessengerKey,
+          home: Scaffold(
+              appBar: AppBar(
+                title: Row(children: [
+                  Text(widget.title),
+                  Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.search),
+                    onPressed: toggleSearchBar,
+                  ),
+                  if (!isSearchBarVisible && searchKeyword.isNotEmpty)
+                    Text(
+                      'Results for "$searchKeyword"',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  IconButton(
+                    icon: Icon(Icons.chat),
+                    onPressed: () {
+                      if (!isSettingsDialogOpen) {
+                        showChatPage(recordLogs,
+                            "Ask anything with your past chat logs, example - Any meeting mentioned about Meeting Noter?");
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.settings),
+                    onPressed: () {
+                      if (!isSettingsDialogOpen) {
+                        showSettingsDialog();
+                      }
+                    },
+                  ),
+                ]),
+                bottom: PreferredSize(
+                  preferredSize: Size.fromHeight(isSearchBarVisible ? 48.0 : 0),
+                  child: isSearchBarVisible
+                      ? Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: TextField(
+                            controller: searchController,
+                            onChanged: (value) {
+                              setState(() {
+                                searchKeyword = value;
+                                _filterRecords();
+                              });
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Search...',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8.0),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                          ),
+                        )
+                      : SizedBox.shrink(),
+                ),
+              ),
+              body: DropTarget(
+                  onDragEntered: (details) {
+                    setState(() {
+                      isDragging = true;
+                    });
+                  },
+                  onDragExited: (details) {
+                    setState(() {
+                      isDragging = false;
+                    });
+                  },
+                  onDragDone: (details) {
+                    setState(() {
+                      isDragging = false;
+                    });
+                    if (details.files.isNotEmpty) {
+                      String filePath = details.files.first.path;
+                      if (filePath.endsWith('.wav') ||
+                          filePath.endsWith('.mp3') ||
+                          filePath.endsWith('.mov') ||
+                          filePath.endsWith('.m4a')) {
+                        _recorderService
+                            .stopRecording(details.files.first.path);
+                      } else {
+                        // Show a message to the user indicating the file format is not supported
+                        _scaffoldMessengerKey.currentState?.showSnackBar(
+                          SnackBar(
+                              content: Text(
+                                  'Unsupported file format. Please use WAV, MP3, mov or m4a.')),
+                        );
+                      }
+                    }
+                  },
+                  child: Stack(children: [
+                    Center(
+                      child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: <Widget>[
-                          ElevatedButton(
-                            onPressed: () {
-                              if (!_recorderService.isProcessing) {
-                                _recorderService.toggleRecording();
-                              }
-                            },
-                            child: _recorderService.isProcessing
-                                ? SizedBox(
-                                    height: 20, // Specify the height of the box
-                                    width: 20, // Specify the width of the box
-                                    child: CircularProgressIndicator(
-                                      strokeWidth:
-                                          1, // Reduce the stroke width to make it look thinner
-                                    ),
-                                  )
-                                : _recorderService.isRecording
-                                    ? Image.asset(
-                                        'images/icon_mic_recording2.png',
-                                        width: 24,
-                                        height: 24)
-                                    : Image.asset('images/micromuted.png',
-                                        width: 24, height: 24),
+                          Text(
+                            _recorderService.isRecording
+                                ? 'Recording in Progress'
+                                : 'Press the mic to start recording or option + w',
                           ),
-                          SizedBox(height: 20),
-                          _recorderService.isProcessing
-                              ? InkWell(
-                                  onTap: () =>
-                                      _recorderService.cancelRecording(),
-                                  child: Text("Cancel",
-                                      style: TextStyle(
-                                          decoration: TextDecoration.underline,
-                                          color: Colors.blue)),
-                                )
-                              : Text(_recorderService.isRecording
-                                  ? 'Recording'
-                                  : 'Pausing'),
-                          ValueListenableBuilder<String?>(
-                            valueListenable: messageNotifier,
-                            builder: (context, message, child) {
-                              if (message == null) {
-                                return Container(); // No message, return an empty container
-                              }
-                              return Container(
-                                color: Colors.blue,
-                                padding: EdgeInsets.all(8.0),
-                                width: double.infinity,
-                                child: Text(
-                                  message,
-                                  style: TextStyle(color: Colors.white),
-                                  textAlign: TextAlign.center,
-                                ),
-                              );
-                            },
+                          Text(
+                            _recorderService.recordedFilePath ??
+                                'No file recorded yet',
                           ),
-                        ],
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: recordLogs.length,
-                          itemBuilder: (context, index) {
-                            RecordResult recordResult = recordLogs[index];
-
-                            // 创建控制器和焦点节点
-                            TextEditingController originalTextController =
-                                TextEditingController(
-                                    text: recordResult.originalText);
-                            FocusNode originalTextFocusNode = FocusNode();
-                            TextEditingController processedTextController =
-                                TextEditingController(
-                                    text: recordResult.processedText);
-                            TextEditingController whisperPromptController =
-                                TextEditingController(
-                                    text: recordResult.whisperPrompt);
-                            FocusNode processedTextFocusNode = FocusNode();
-
-                            // 添加焦点监听器
-                            originalTextFocusNode.addListener(() {
-                              if (!originalTextFocusNode.hasFocus) {
-                                // 更新数据并保存
-                                recordResult.originalText =
-                                    originalTextController.text;
-                                saveRecordResult(recordResult, index);
-                              }
-                            });
-
-                            processedTextFocusNode.addListener(() {
-                              if (!processedTextFocusNode.hasFocus) {
-                                // 更新数据并保存
-                                recordResult.processedText =
-                                    processedTextController.text;
-                                saveRecordResult(recordResult, index);
-                              }
-                            });
-
-                            return Card(
-                              elevation: 4.0,
-                              margin: EdgeInsets.symmetric(
-                                  horizontal: 10.0, vertical: 6.0),
-                              child: ExpansionTile(
-                                title: Text('${recordResult.timestamp}'),
-                                subtitle: Text(
-                                  recordResult.processedText.length > 50
-                                      ? '${recordResult.processedText.substring(0, 50)}...'
-                                      : recordResult.processedText,
-                                ),
-                                backgroundColor: Colors.grey[200],
-                                children: <Widget>[
-                                  ExpansionTile(
-                                      title: const Text(
-                                        '細節內容',
-                                        style: TextStyle(
-                                          fontSize: 20, // 更大的字体尺寸
-                                          fontWeight: FontWeight.bold, // 加粗字体
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: <Widget>[
+                              ElevatedButton(
+                                onPressed: () {
+                                  if (!_recorderService.isProcessing) {
+                                    _recorderService.toggleRecording();
+                                  }
+                                },
+                                child: _recorderService.isProcessing
+                                    ? SizedBox(
+                                        height:
+                                            20, // Specify the height of the box
+                                        width:
+                                            20, // Specify the width of the box
+                                        child: CircularProgressIndicator(
+                                          strokeWidth:
+                                              1, // Reduce the stroke width to make it look thinner
                                         ),
-                                      ),
-                                      children: <Widget>[
-                                        ExpansionTile(
+                                      )
+                                    : _recorderService.isRecording
+                                        ? Image.asset(
+                                            'images/icon_mic_recording2.png',
+                                            width: 24,
+                                            height: 24)
+                                        : Image.asset('images/micromuted.png',
+                                            width: 24, height: 24),
+                              ),
+                              SizedBox(height: 20),
+                              _recorderService.isProcessing
+                                  ? InkWell(
+                                      onTap: () =>
+                                          _recorderService.cancelRecording(),
+                                      child: Text("Cancel",
+                                          style: TextStyle(
+                                              decoration:
+                                                  TextDecoration.underline,
+                                              color: Colors.blue)),
+                                    )
+                                  : Text(_recorderService.isRecording
+                                      ? 'Recording'
+                                      : 'Pausing'),
+                              ValueListenableBuilder<String?>(
+                                valueListenable: messageNotifier,
+                                builder: (context, message, child) {
+                                  if (message == null) {
+                                    return Container(); // No message, return an empty container
+                                  }
+                                  return Container(
+                                    color: Colors.blue,
+                                    padding: EdgeInsets.all(8.0),
+                                    width: double.infinity,
+                                    child: Text(
+                                      message,
+                                      style: TextStyle(color: Colors.white),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: filteredRecordLogs.length,
+                              itemBuilder: (context, index) {
+                                int originalIndex =
+                                    filteredRecordLogs[index].key;
+                                RecordResult recordResult =
+                                    filteredRecordLogs[index].value;
+
+                                // 创建控制器和焦点节点
+                                TextEditingController originalTextController =
+                                    TextEditingController(
+                                        text: recordResult.originalText);
+                                FocusNode originalTextFocusNode = FocusNode();
+                                TextEditingController processedTextController =
+                                    TextEditingController(
+                                        text: recordResult.processedText);
+                                TextEditingController whisperPromptController =
+                                    TextEditingController(
+                                        text: recordResult.whisperPrompt);
+                                FocusNode processedTextFocusNode = FocusNode();
+
+                                // 添加焦点监听器
+                                originalTextFocusNode.addListener(() {
+                                  if (!originalTextFocusNode.hasFocus) {
+                                    // 更新数据并保存
+                                    recordResult.originalText =
+                                        originalTextController.text;
+                                    saveRecordResult(
+                                        recordResult, originalIndex);
+                                  }
+                                });
+
+                                processedTextFocusNode.addListener(() {
+                                  if (!processedTextFocusNode.hasFocus) {
+                                    // 更新数据并保存
+                                    recordResult.processedText =
+                                        processedTextController.text;
+                                    saveRecordResult(
+                                        recordResult, originalIndex);
+                                  }
+                                });
+
+                                return Card(
+                                  elevation: 4.0,
+                                  margin: EdgeInsets.symmetric(
+                                      horizontal: 10.0, vertical: 6.0),
+                                  child: ExpansionTile(
+                                    title: Text('${recordResult.timestamp}'),
+                                    subtitle: Text(
+                                      recordResult.processedText.length > 50
+                                          ? '${recordResult.processedText.substring(0, 50)}...'
+                                          : recordResult.processedText,
+                                    ),
+                                    backgroundColor: Colors.grey[200],
+                                    children: <Widget>[
+                                      ExpansionTile(
                                           title: const Text(
-                                            '原始音檔文字',
+                                            '細節內容',
                                             style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.black87),
+                                              fontSize: 20, // 更大的字体尺寸
+                                              fontWeight:
+                                                  FontWeight.bold, // 加粗字体
+                                            ),
                                           ),
                                           children: <Widget>[
-                                            TextField(
-                                              controller:
-                                                  originalTextController,
-                                              focusNode: originalTextFocusNode,
-                                              style: TextStyle(
-                                                  color: Colors.black,
-                                                  fontSize: 16),
-                                              cursorColor: Colors.blue,
-                                              decoration: InputDecoration(
-                                                border: InputBorder
-                                                    .none, // 无边框，根据需要选择合适的边框样式
+                                            ExpansionTile(
+                                              title: const Text(
+                                                '原始音檔文字',
+                                                style: TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.black87),
                                               ),
-                                              maxLines: null, // 允许无限行
-                                            ),
-                                          ],
-                                        ),
-                                        buildPromptDropdown(
-                                            recordResult.promptText,
-                                            _recorderService.getPrompts(),
-                                            (selectedPrompt) {
-                                          setState(() {
-                                            recordResult.promptText =
-                                                selectedPrompt; // Update the current prompt text
-                                            _recorderService
-                                                .handleExistingPrompt(
-                                                    selectedPrompt,
-                                                    recordResult,
-                                                    index);
-                                          });
-                                        }),
-                                        if (recordResult.filePath != null &&
-                                            recordResult.filePath!.isNotEmpty)
-                                          ListTile(
-                                            title: const Text(
-                                              '專有詞修正（Optional -  會覆蓋 default settings)',
-                                              style: TextStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.black87),
-                                            ),
-                                            subtitle: TextField(
-                                              controller:
-                                                  whisperPromptController,
-                                              style: TextStyle(
-                                                  color: Colors.black,
-                                                  fontSize: 16),
-                                              cursorColor: Colors.blue,
-                                              decoration: InputDecoration(
-                                                border:
-                                                    OutlineInputBorder(), // Use an outline border
-                                                hintText: 'ex: LIAM HUB, IAM',
-                                              ),
-                                              maxLines: null,
-                                            ),
-                                            trailing: IconButton(
-                                              icon: Icon(Icons.refresh),
-                                              onPressed: () {
-                                                String whisperPrompt =
-                                                    whisperPromptController
-                                                        .text;
-                                                recordResult.whisperPrompt =
-                                                    whisperPrompt;
-                                                saveWhisperPrompt(
-                                                    recordResult, index);
-                                              },
-                                            ),
-                                          ),
-                                        ListTile(
-                                          title: const Text(
-                                            'AI整理檔案（可編輯）',
-                                            style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.black87),
-                                          ),
-                                          subtitle: Column(
-                                            children: <Widget>[
-                                              Container(
-                                                padding: EdgeInsets.all(8.0),
-                                                decoration: BoxDecoration(
-                                                  border: Border.all(
-                                                      color: Colors.grey),
-                                                  borderRadius:
-                                                      BorderRadius.circular(5),
-                                                ),
-                                                child: TextField(
+                                              children: <Widget>[
+                                                TextField(
                                                   controller:
-                                                      processedTextController,
+                                                      originalTextController,
                                                   focusNode:
-                                                      processedTextFocusNode,
-                                                  maxLines: 5,
+                                                      originalTextFocusNode,
                                                   style: TextStyle(
                                                       color: Colors.black,
                                                       fontSize: 16),
-                                                  decoration:
-                                                      InputDecoration.collapsed(
-                                                          hintText:
-                                                              "Edit Processed Text"),
+                                                  cursorColor: Colors.blue,
+                                                  decoration: InputDecoration(
+                                                    border: InputBorder
+                                                        .none, // 无边框，根据需要选择合适的边框样式
+                                                  ),
+                                                  maxLines: null, // 允许无限行
+                                                ),
+                                              ],
+                                            ),
+                                            buildPromptDropdown(
+                                                recordResult.promptText,
+                                                _recorderService.getPrompts(),
+                                                (selectedPrompt) {
+                                              setState(() {
+                                                recordResult.promptText =
+                                                    selectedPrompt; // Update the current prompt text
+                                                _recorderService
+                                                    .handleExistingPrompt(
+                                                        selectedPrompt,
+                                                        recordResult,
+                                                        originalIndex);
+                                              });
+                                            }),
+                                            if (recordResult.filePath != null &&
+                                                recordResult
+                                                    .filePath!.isNotEmpty)
+                                              ListTile(
+                                                title: const Text(
+                                                  '專有詞修正（Optional -  會覆蓋 default settings)',
+                                                  style: TextStyle(
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.black87),
+                                                ),
+                                                subtitle: TextField(
+                                                  controller:
+                                                      whisperPromptController,
+                                                  style: TextStyle(
+                                                      color: Colors.black,
+                                                      fontSize: 16),
+                                                  cursorColor: Colors.blue,
+                                                  decoration: InputDecoration(
+                                                    border:
+                                                        OutlineInputBorder(), // Use an outline border
+                                                    hintText:
+                                                        'ex: LIAM HUB, IAM',
+                                                  ),
+                                                  maxLines: null,
+                                                ),
+                                                trailing: IconButton(
+                                                  icon: Icon(Icons.refresh),
+                                                  onPressed: () {
+                                                    String whisperPrompt =
+                                                        whisperPromptController
+                                                            .text;
+                                                    recordResult.whisperPrompt =
+                                                        whisperPrompt;
+                                                    saveWhisperPrompt(
+                                                        recordResult,
+                                                        originalIndex);
+                                                  },
                                                 ),
                                               ),
-                                            ],
+                                            ListTile(
+                                              title: const Text(
+                                                'AI整理檔案（可編輯）',
+                                                style: TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.black87),
+                                              ),
+                                              subtitle: Column(
+                                                children: <Widget>[
+                                                  Container(
+                                                    padding:
+                                                        EdgeInsets.all(8.0),
+                                                    decoration: BoxDecoration(
+                                                      border: Border.all(
+                                                          color: Colors.grey),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              5),
+                                                    ),
+                                                    child: TextField(
+                                                      controller:
+                                                          processedTextController,
+                                                      focusNode:
+                                                          processedTextFocusNode,
+                                                      maxLines: 5,
+                                                      style: TextStyle(
+                                                          color: Colors.black,
+                                                          fontSize: 16),
+                                                      decoration: InputDecoration
+                                                          .collapsed(
+                                                              hintText:
+                                                                  "Edit Processed Text"),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ]),
+                                      if (!processedTextFocusNode.hasFocus)
+                                        ListTile(
+                                          title: const Text(
+                                            '會議總結',
+                                            style: TextStyle(
+                                              fontSize: 20, // 更大的字体尺寸
+                                              fontWeight:
+                                                  FontWeight.bold, // 加粗字体
+                                            ),
+                                          ),
+                                          subtitle: Container(
+                                            padding: EdgeInsets.all(8.0),
+                                            child: MarkdownBody(
+                                              data:
+                                                  processedTextController.text,
+                                            ),
                                           ),
                                         ),
-                                      ]),
-                                  if (!processedTextFocusNode.hasFocus)
-                                    ListTile(
-                                      title: const Text(
-                                        '會議總結',
-                                        style: TextStyle(
-                                          fontSize: 20, // 更大的字体尺寸
-                                          fontWeight: FontWeight.bold, // 加粗字体
-                                        ),
-                                      ),
-                                      subtitle: Container(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: MarkdownBody(
-                                          data: processedTextController.text,
-                                        ),
-                                      ),
-                                    ),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(Icons.chat),
-                                        onPressed: () {
-                                          // Navigate to chat page with the current record
-                                          showChatPage([
-                                            recordResult
-                                          ], "${recordResult.processedText.substring(0, 100)}... \n\n\n Ask anything detail about this meeting");
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: Icon(Icons.share),
-                                        onPressed: () {
-                                          // 分享操作
-                                          shareRecording(recordResult);
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: Icon(Icons.content_copy),
-                                        onPressed: () {
-                                          copyRecording(recordResult);
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: Icon(Icons.delete),
-                                        onPressed: () {
-                                          // 删除操作
-                                          deleteRecording(index);
-                                        },
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.end,
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(Icons.chat),
+                                            onPressed: () {
+                                              // Navigate to chat page with the current record
+                                              showChatPage([
+                                                recordResult
+                                              ], "${recordResult.processedText.substring(0, 100)}... \n\n\n Ask anything detail about this meeting");
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: Icon(Icons.share),
+                                            onPressed: () {
+                                              // 分享操作
+                                              shareRecording(recordResult);
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: Icon(Icons.content_copy),
+                                            onPressed: () {
+                                              copyRecording(recordResult);
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: Icon(Icons.delete),
+                                            onPressed: () {
+                                              // 删除操作
+                                              deleteRecording(originalIndex);
+                                            },
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isDragging)
-                  Container(
-                    color: Colors.blue.withOpacity(0.2),
-                    child: Center(
-                      child: Text(
-                        'Drop the file here',
-                        style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-              ]))),
-      routes: {
-        SettingsPage.routeName: (context) => const SettingsPage(),
-        ChatPage.routeName: (context) =>
-            ChatPage(recordLogs: recordLogs, initialText: ''),
-      },
-    );
+                    if (isDragging)
+                      Container(
+                        color: Colors.blue.withOpacity(0.2),
+                        child: Center(
+                          child: Text(
+                            'Drop the file here',
+                            style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue),
+                          ),
+                        ),
+                      ),
+                  ]))),
+          routes: {
+            SettingsPage.routeName: (context) => const SettingsPage(),
+            ChatPage.routeName: (context) =>
+                ChatPage(recordLogs: recordLogs, initialText: ''),
+          },
+        ));
   }
 
   @override

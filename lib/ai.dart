@@ -16,6 +16,8 @@ class LlmOptions {
   String? customLlmUrl;
   String? huggingfaceToken;
   String? huggingfaceGguf;
+  String? openaiCompletionBaseUrl;
+  String? openaiAudioBaseUrl;
   LlmOptions(
       {this.apiKey,
       this.apiUrl,
@@ -24,7 +26,9 @@ class LlmOptions {
       this.customLlmModel,
       this.customLlmUrl,
       this.huggingfaceToken,
-      this.huggingfaceGguf});
+      this.huggingfaceGguf,
+      this.openaiCompletionBaseUrl,
+      this.openaiAudioBaseUrl});
 }
 
 class LlmService {
@@ -41,8 +45,7 @@ class LlmService {
       if (!prompt.contains('{topic}')) {
         prompt = '{topic}\n$prompt';
       }
-      return await callOpenAI(config.apiKey ?? '',
-          config.openAiModel ?? 'gpt-3.5-turbo', prompt, content);
+      return await callOpenAI(config, prompt, content);
     } else if (llmChoice == 'ollama') {
       if (!prompt.contains('{topic}')) {
         prompt = '{topic}\n$prompt';
@@ -156,20 +159,31 @@ class LlmService {
   }
 
   Future<String> callOpenAI(
-      String apiKey, String? modelType, String prompt, String content) async {
+      LlmOptions config, String prompt, String content) async {
     int chunkSize = 3000; // Default chunk size for GPT-3.5
     int chunkOverlap = 200;
 
-    if (modelType != null && modelType.startsWith('gpt-4')) {
+    if (config.openAiModel != null && config.openAiModel!.startsWith('gpt-4')) {
       chunkSize = 60000; // GPT-4 can handle larger texts
-    } else if (modelType != null && modelType.startsWith('gpt-3')) {
-      chunkSize = 6000; // Adjusted chunk size for GPT-3 models
     }
-    ChatOpenAI model = ChatOpenAI(
-        apiKey: apiKey,
+    ChatOpenAI model;
+    if (config.openaiCompletionBaseUrl != null &&
+        config.openaiCompletionBaseUrl!.isNotEmpty) {
+      model = ChatOpenAI(
+        apiKey: config.apiKey,
+        baseUrl: config.openaiCompletionBaseUrl!,
         defaultOptions: ChatOpenAIOptions(
-          model: modelType ?? "gpt-3.5-turbo",
-        ));
+          model: config.openAiModel ?? "gpt-4o-mini",
+        ),
+      );
+    } else {
+      model = ChatOpenAI(
+        apiKey: config.apiKey,
+        defaultOptions: ChatOpenAIOptions(
+          model: config.openAiModel ?? "gpt-4o-mini",
+        ),
+      );
+    }
     RecursiveCharacterTextSplitter textSplitter =
         RecursiveCharacterTextSplitter(
             chunkSize: chunkSize, chunkOverlap: chunkOverlap);

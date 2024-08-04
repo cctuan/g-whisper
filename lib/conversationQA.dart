@@ -1,3 +1,4 @@
+import 'package:g_whisper/ai.dart';
 import 'package:langchain/langchain.dart';
 import 'package:langchain_openai/langchain_openai.dart';
 import './recordResult.dart';
@@ -35,16 +36,26 @@ class Memory {
 }
 
 class ConversationalQA {
-  final String openaiApiKey;
+  final Map<String, dynamic> settings;
   final List<RecordResult> recordLogs;
   final Memory memory = Memory();
   late Runnable conversationalQaChain;
 
-  ConversationalQA({required this.openaiApiKey, required this.recordLogs});
+  ConversationalQA({required this.settings, required this.recordLogs});
 
   Future<void> init() async {
-    final embeddings = OpenAIEmbeddings(apiKey: openaiApiKey);
-
+    final OpenAIEmbeddings embeddings;
+    if (settings['openai_completion_base_url'] != null &&
+        settings['openai_completion_base_url'].isNotEmpty) {
+      embeddings = OpenAIEmbeddings(
+        apiKey: settings['openai_key'],
+        baseUrl: settings['openai_completion_base_url'],
+      );
+    } else {
+      embeddings = OpenAIEmbeddings(
+        apiKey: settings['openai_key'],
+      );
+    }
     List<Document> documents;
     // Load documents from recordLogs
     if (recordLogs.length == 1) {
@@ -74,10 +85,20 @@ class ConversationalQA {
         searchType: VectorStoreSimilaritySearch(k: 3),
       ),
     );
-    final model = ChatOpenAI(
-      apiKey: openaiApiKey,
-      defaultOptions: ChatOpenAIOptions(model: 'gpt-4o'),
-    );
+    final ChatOpenAI model;
+    if (settings['openai_completion_base_url'] != null &&
+        settings['openai_completion_base_url'].isNotEmpty) {
+      model = ChatOpenAI(
+        apiKey: settings['openai_key'],
+        baseUrl: settings['openai_completion_base_url'],
+        defaultOptions: ChatOpenAIOptions(model: 'gpt-4o-mini'),
+      );
+    } else {
+      model = ChatOpenAI(
+        apiKey: settings['openai_key'],
+        defaultOptions: ChatOpenAIOptions(model: 'gpt-4o-mini'),
+      );
+    }
     const stringOutputParser = StringOutputParser<ChatResult>();
 
     // Define prompts

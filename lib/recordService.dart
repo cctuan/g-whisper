@@ -216,6 +216,12 @@ class RecorderService {
       }
       OpenAI.requestsTimeOut = Duration(minutes: 5);
       OpenAI.apiKey = settings?['openai_key'] ?? "";
+      if (settings?['openai_audio_base_url'] != null &&
+          settings?['openai_audio_base_url'].isNotEmpty) {
+        OpenAI.baseUrl = settings?['openai_audio_base_url'];
+      } else {
+        OpenAI.baseUrl = "https://api.openai.com";
+      }
       OpenAIAudioModel transcription =
           await OpenAI.instance.audio.createTranscription(
         file: part.file,
@@ -512,7 +518,7 @@ class RecorderService {
       String prompt, RecordResult recordResult, int recordIndex) async {
     setProcessing(true);
     await _processText(recordResult.originalText, recordResult.filePath,
-        recordIndex, prompt, recordResult.id);
+        recordIndex, recordResult);
   }
 
   void handleText(String content, String filePath) async {
@@ -524,8 +530,7 @@ class RecorderService {
 
   Future<void> _processText(String content, String? filePath,
       [int? recordIndex,
-      String? customPrompt,
-      int? recordId,
+      RecordResult? recordResult,
       String? whisperPrompt]) async {
     List<PromptItem> prompts = settings?['prompts'] ?? [];
     if (prompts.isEmpty || settings == null) {
@@ -567,13 +572,19 @@ class RecorderService {
       return;
     }
 
+    // int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
+    // PromptItem selectedPrompt = customPrompt != null
+    //     ? PromptItem(prompt: customPrompt, name: "custom prompt")
+    //     : prompts[defaultPromptIndex];
     int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
-    PromptItem selectedPrompt = customPrompt != null
-        ? PromptItem(prompt: customPrompt, name: "custom prompt")
-        : prompts[defaultPromptIndex];
+    PromptItem selectedPrompt =
+        recordResult != null && recordResult.promptText != null
+            ? PromptItem(prompt: recordResult.promptText, name: "custom prompt")
+            : prompts[defaultPromptIndex];
 
     String promptTemplate = selectedPrompt.prompt;
-    if (defaultPromptIndex! >= prompts.length && customPrompt == null) {
+    if (defaultPromptIndex >= prompts.length &&
+        (recordResult == null || recordResult.promptText == null)) {
       print("Settings are not configured properly.");
       setProcessing(false);
       onStatusUpdateCallback?.call("Settings are not configured properly.");
@@ -588,6 +599,8 @@ class RecorderService {
       customLlmModel: settings?['custom_llm_model'],
       huggingfaceToken: settings?['huggingface_token'],
       huggingfaceGguf: settings?['huggingface_gguf'],
+      openaiCompletionBaseUrl: settings?['openai_completion_base_url'],
+      openaiAudioBaseUrl: settings?['openai_audio_base_url'],
     );
     onStatusUpdateCallback?.call("Processing summary...");
 
@@ -595,7 +608,7 @@ class RecorderService {
         settings?['llm_choice'], options, onStatusUpdateCallback);
 
     // Create a date-time stamp
-    String formattedDate =
+    String formattedDate = recordResult?.timestamp ??
         DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
     // Prepare the message string according to the specified format
@@ -610,7 +623,7 @@ class RecorderService {
       ''';
     // Print the message to console
     print(message);
-    RecordResult recordResult = RecordResult(
+    RecordResult finalRecordResult = RecordResult(
       originalText: content,
       processedText: result,
       timestamp: formattedDate,
@@ -620,7 +633,8 @@ class RecorderService {
     );
     setProcessing(false);
     onStatusUpdateCallback?.call("Summary processed successfully.");
-    onRecordCompleteReturn?.call(recordResult, recordIndex, recordId);
+    onRecordCompleteReturn?.call(
+        finalRecordResult, recordIndex, recordResult?.id);
   }
 
   Future<void> rerun(RecordResult recordResult, int index) async {
@@ -653,8 +667,8 @@ class RecorderService {
       }
       print(text);
       onStatusUpdateCallback?.call('Transcribed audio successfully.');
-      await _processText(text, recordResult.filePath, index,
-          recordResult.promptText, recordResult.id, recordResult.whisperPrompt);
+      await _processText(text, recordResult.filePath, index, recordResult,
+          recordResult.whisperPrompt);
     } catch (e) {
       // Handle the error more specifically if you can
       if (e is SocketException) {

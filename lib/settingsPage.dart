@@ -23,7 +23,11 @@ class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController huggingfaceGgufController =
       TextEditingController();
   final TextEditingController whisperPromptController = TextEditingController();
-  String openAiModel = 'gpt-3.5-turbo'; // Default model
+  final TextEditingController openaiAudioBaseUrlController =
+      TextEditingController();
+  final TextEditingController openaiCompletionBaseUrlController =
+      TextEditingController();
+  String openAiModel = 'gpt-4o-mini'; // Default model
   String localWhisperModel = 'base'; // Default local whisper model
   final TextEditingController promptController = TextEditingController();
   List<PromptItem> prompts = [];
@@ -55,7 +59,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       openAiModel = (settings['openai_model']?.isNotEmpty ?? false)
           ? settings['openai_model']
-          : 'gpt-3.5-turbo';
+          : 'gpt-4o-mini';
       localWhisperModel = (settings['local_whisper_model']?.isNotEmpty ?? false)
           ? settings['local_whisper_model']
           : 'base';
@@ -67,6 +71,10 @@ class _SettingsPageState extends State<SettingsPage> {
       huggingfaceTokenController.text = settings['huggingface_token'] ?? '';
       huggingfaceGgufController.text = settings['huggingface_gguf'] ?? '';
       whisperPromptController.text = settings['whisper_prompt'] ?? '';
+      openaiAudioBaseUrlController.text =
+          settings['openai_audio_base_url'] ?? '';
+      openaiCompletionBaseUrlController.text =
+          settings['openai_completion_base_url'] ?? '';
       prompts = settings['prompts'];
       useOpenAIWhisper = settings['use_openai_whisper'] ?? false;
       llmChoice = settings['llm_choice'] ?? 'openai';
@@ -92,6 +100,8 @@ class _SettingsPageState extends State<SettingsPage> {
       huggingfaceGgufController.text,
       whisperPromptController.text,
       storeOriginalAudio,
+      openaiCompletionBaseUrlController.text,
+      openaiAudioBaseUrlController.text,
     );
     Navigator.pop(context);
   }
@@ -101,38 +111,35 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
+        actions: [
+          TextButton(
+            child: const Text('Save'),
+            onPressed: () {
+              if (openAiKeyController.text.isNotEmpty &&
+                  prompts.isNotEmpty &&
+                  prompts
+                      .any((p) => p.name.isNotEmpty && p.prompt.isNotEmpty) &&
+                  defaultPromptIndex != null &&
+                  prompts.length > defaultPromptIndex!) {
+                saveSettings();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                        'Please fill in all fields, add at least one prompt with name and content, and set a default prompt.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).primaryColor,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                if (openAiKeyController.text.isNotEmpty &&
-                    prompts.isNotEmpty &&
-                    prompts
-                        .any((p) => p.name.isNotEmpty && p.prompt.isNotEmpty) &&
-                    defaultPromptIndex != null &&
-                    prompts.length > defaultPromptIndex!) {
-                  saveSettings();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          'Please fill in all fields, add at least one prompt with name and content, and set a default prompt.'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              child: const Text('Save Settings'),
-            ),
-            const SizedBox(height: 20),
             Text(
               "STT Options",
               style: Theme.of(context).textTheme.headlineMedium,
@@ -187,6 +194,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   helperText: 'Enter your OpenAI API Key here',
                 ),
               ),
+              TextField(
+                controller: openaiAudioBaseUrlController,
+                decoration: InputDecoration(
+                  labelText: 'OpenAI Audio Base URL (optional)',
+                  helperText: 'Enter your OpenAI Audio Base URL here',
+                ),
+              ),
             ],
             const SizedBox(height: 20),
             Text(
@@ -221,13 +235,20 @@ class _SettingsPageState extends State<SettingsPage> {
                     openAiModel = newValue!;
                   });
                 },
-                items: <String>['gpt-3.5-turbo', 'gpt-4-turbo', 'gpt-4o']
+                items: <String>['gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini']
                     .map<DropdownMenuItem<String>>((String value) {
                   return DropdownMenuItem<String>(
                     value: value,
                     child: Text(value),
                   );
                 }).toList(),
+              ),
+              TextField(
+                controller: openaiCompletionBaseUrlController,
+                decoration: InputDecoration(
+                  labelText: 'OpenAI Completion Base URL (optional)',
+                  helperText: 'Enter your OpenAI Completion Base URL here',
+                ),
               ),
             ],
             ListTile(
