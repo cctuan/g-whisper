@@ -32,5 +32,7 @@
 	<string>Some message to describe why you need this permission</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>This app requires access to audio output to record system audio.</string>
+	<key>NSApplicationRequiresScreenCapture</key>
+	<string>We need Apple events access to perform screen recording.</string>
 </dict>
 </plist>

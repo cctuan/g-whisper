@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'screenshot_service.dart'; // Import the screenshot service
+
 import './storage.dart';
 import './settingsPage.dart';
 import './recordService.dart';
@@ -27,7 +29,7 @@ void main() async {
   await hotKeyManager.unregisterAll();
   List<RecordResult> recordLogs = await DatabaseHelper().getRecordings();
 
-  runApp(MyApp(title: 'G Whisper dev-0.1.2', initialRecordLogs: recordLogs));
+  runApp(MyApp(title: 'G Whisper dev-0.2.0', initialRecordLogs: recordLogs));
   // await hotKeyManager.unregisterAll();
 }
 
@@ -42,8 +44,11 @@ class MyApp extends StatefulWidget {
 
 class _MyHomePageState extends State<MyApp> with TrayListener {
   final SettingsService settingsService = SettingsService();
+  // final _cropperKey = GlobalKey(debugLabel: 'cropperKey');
   late final RecorderService _recorderService;
+  late final ScreenshotService _screenshotService;
   late HotKey _hotKey;
+  late HotKey _screenshotHotKey;
   bool isSettingsDialogOpen =
       false; // Flag to track if the settings dialog is open
   List<RecordResult> recordLogs = []; // 存储录音记录的列表
@@ -55,6 +60,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   bool isSearchBarVisible = false;
 
   late TextEditingController searchController;
+  late ScreenshotService screenshotService;
 
   ValueNotifier<String?> messageNotifier = ValueNotifier<String?>(null);
 
@@ -73,8 +79,16 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
       setState(() {
         // 這會觸發 UI 重新建構
         updateTrayIcon();
+        _handleScreenshotHotKey();
       });
     };
+    _screenshotService = ScreenshotService(
+      onScreenshotTaken: (imagePath, timestamp) {
+        if (imagePath != null) {
+          _recorderService.addScreenshot(imagePath, timestamp);
+        }
+      },
+    );
     await _recorderService.init();
     setState(() => {});
     _recorderService.onRecordCompleteReturn =
@@ -198,6 +212,97 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
       print('Failed to register hotkey: $error');
     });
   }
+
+  void _handleScreenshotHotKey() {
+    if (_recorderService.isRecording) {
+      _setupScreenshotHotKey();
+    } else {
+      _unregisterScreenshotHotKey();
+    }
+  }
+
+  void _setupScreenshotHotKey() async {
+    _screenshotHotKey = HotKey(
+      key: PhysicalKeyboardKey.keyC,
+      modifiers: [HotKeyModifier.alt],
+      scope: HotKeyScope.system,
+    );
+
+    hotKeyManager
+        .register(
+      _screenshotHotKey,
+      keyDownHandler: (_) => _screenshotService
+          .captureAndCropScreenshot(navigatorKey.currentContext!),
+    )
+        .catchError((error) {
+      print('Failed to register screenshot hotkey: $error');
+    });
+  }
+
+  void _unregisterScreenshotHotKey() async {
+    hotKeyManager.unregister(_screenshotHotKey).catchError((error) {
+      print('Failed to unregister screenshot hotkey: $error');
+    });
+  }
+
+  void _handleScreenshotTaken(
+      Uint8List? croppedImageBytes, String timestamp) async {
+    if (croppedImageBytes != null) {
+      print('Cropped image bytes: $croppedImageBytes , timestamp: $timestamp');
+      // String croppedImagePath = '/path/to/save/cropped_screenshot_$timestamp.png';
+      // File imgFile = File(croppedImagePath);
+      // await imgFile.writeAsBytes(croppedImageBytes);
+
+      // RecordResult? currentRecord = _recorderService.currentRecord;
+      // if (currentRecord != null) {
+      //   currentRecord.screenshots.add({
+      //     'path': croppedImagePath,
+      //     'timestamp': timestamp,
+      //   });
+
+      //   await DatabaseHelper().updateRecording(currentRecord);
+      //   setState(() {});
+      // }
+    }
+  }
+  // Future<void> _captureScreenshot() async {
+  //   String timestamp = DateTime.now().toIso8601String();
+  //   String screenshotPath = '/path/to/save/screenshot_$timestamp.png';
+
+  //   try {
+  //     screenshotController.capture().then((Uint8List? image) async {
+  //       if (image != null) {
+  //         File imgFile = File(screenshotPath);
+  //         await imgFile.writeAsBytes(image);
+
+  //         await Navigator.push(
+  //           context,
+  //           MaterialPageRoute(
+  //             builder: (context) => Scaffold(
+  //               appBar: AppBar(title: Text('Crop Image')),
+  //               body: Cropper(
+  //                 cropperKey: _cropperKey,
+  //                 image: image,
+  //                 onCropped: (croppedImage) async {
+  //                   String croppedImagePath =
+  //                       '/path/to/save/cropped_screenshot_$timestamp.png';
+  //                   File croppedImageFile = File(croppedImagePath);
+  //                   await croppedImageFile.writeAsBytes(croppedImage);
+
+  //                   _recorderService.addScreenshot(croppedImagePath, timestamp);
+  //                   setState(() {});
+  //                   Navigator.pop(context); // Close the cropper screen
+  //                 },
+  //               ),
+  //             ),
+  //           ),
+  //         );
+  //       }
+  //     });
+  //   } catch (e) {
+  //     print('Failed to capture screenshot: $e');
+  //   }
+  // }
 
   Future<void> saveSettings(String key, String prompt) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();

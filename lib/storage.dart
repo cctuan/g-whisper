@@ -25,7 +25,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2, // Incremented database version
+      version: 3, // Incremented database version
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE recordings(
@@ -35,7 +35,8 @@ class DatabaseHelper {
             processedText TEXT,
             promptText TEXT,
             whisperPrompt TEXT,
-            filePath TEXT
+            filePath TEXT,
+            screenshots TEXT
           )
         ''');
       },
@@ -46,6 +47,11 @@ class DatabaseHelper {
           ''');
           await db.execute('''
             ALTER TABLE recordings ADD COLUMN filePath TEXT;
+          ''');
+        }
+        if (oldVersion < 3) {
+          await db.execute('''
+            ALTER TABLE recordings ADD COLUMN screenshots TEXT;
           ''');
         }
       },

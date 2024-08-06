@@ -49,6 +49,7 @@ class RecorderService {
   Map<String, dynamic>? settings;
   double thresholdHigh = -39.0; // 高于初始值的百分比
   bool lastVolumeStatus = false;
+  List<Map<String, String>> screenshots = []; // 截图信息列表
 
   Future<void> init() async {
     settings = await settingsService.loadSettings();
@@ -139,6 +140,7 @@ class RecorderService {
           DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
 
       String path = '${dir!.path}/record_$formattedDate.m4a';
+      screenshots.clear(); // Clear previous screenshots
       await _recorder.start(
         const RecordConfig(encoder: AudioEncoder.wav),
         path: path,
@@ -631,6 +633,11 @@ class RecorderService {
       promptText: promptTemplate,
       whisperPrompt: whisperPrompt ?? '',
     );
+    // Add screenshots to the final record result
+    for (var screenshot in screenshots) {
+      finalRecordResult.addScreenshot(
+          screenshot['path']!, screenshot['timestamp']!);
+    }
     setProcessing(false);
     onStatusUpdateCallback?.call("Summary processed successfully.");
     onRecordCompleteReturn?.call(
@@ -682,6 +689,15 @@ class RecorderService {
       }
       setProcessing(false);
     }
+  }
+
+  Future<void> addScreenshot(String imageFilePath, String timestamp) async {
+    if (!_isRecording) {
+      print("Not recording. Screenshot not added.");
+      return;
+    }
+    screenshots.add({'path': imageFilePath, 'timestamp': timestamp});
+    print("Screenshot added: $imageFilePath at $timestamp");
   }
 
   void dispose() {
