@@ -50,6 +50,7 @@ class RecorderService {
   double thresholdHigh = -39.0; // 高于初始值的百分比
   bool lastVolumeStatus = false;
   List<Map<String, String>> screenshots = []; // 截图信息列表
+  DateTime? _recordingStartTime; // 增加一个字段来记录开始录音的时间
 
   Future<void> init() async {
     settings = await settingsService.loadSettings();
@@ -146,6 +147,7 @@ class RecorderService {
         path: path,
       );
       _isRecording = true;
+      _recordingStartTime = DateTime.now(); // 记录开始录音的时间
       onRecordingStateChanged?.call();
     }
   }
@@ -231,6 +233,7 @@ class RecorderService {
         prompt: prompt,
         responseFormat: OpenAIAudioResponseFormat.srt,
       );
+
       // 删除临时文件
       await part.file.delete();
       // Print the transcription to the console or handle it as needed.
@@ -574,10 +577,6 @@ class RecorderService {
       return;
     }
 
-    // int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
-    // PromptItem selectedPrompt = customPrompt != null
-    //     ? PromptItem(prompt: customPrompt, name: "custom prompt")
-    //     : prompts[defaultPromptIndex];
     int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
     PromptItem selectedPrompt =
         recordResult != null && recordResult.promptText != null
@@ -606,8 +605,23 @@ class RecorderService {
     );
     onStatusUpdateCallback?.call("Processing summary...");
 
-    String result = await llmService!.callLlm(promptTemplate ?? '', content,
-        settings?['llm_choice'], options, onStatusUpdateCallback);
+    // Use screenshots from recordResult if available
+    List<Map<String, String>> usedScreenshots =
+        recordResult?.screenshots ?? screenshots;
+
+    // Create screenshot summary string
+    StringBuffer screenshotSummary = StringBuffer();
+    for (var screenshot in usedScreenshots) {
+      screenshotSummary.writeln(
+          'image time: ${screenshot['timestamp']}, image path:${screenshot['path']}');
+    }
+
+    // Prepend the screenshot summary to the content
+    String finalContent =
+        'image path and time:${screenshotSummary.toString()}\nCaptions:$content';
+
+    String result = await llmService!.callLlm(promptTemplate ?? '',
+        finalContent, settings?['llm_choice'], options, onStatusUpdateCallback);
 
     // Create a date-time stamp
     String formattedDate = recordResult?.timestamp ??
@@ -622,6 +636,9 @@ class RecorderService {
 
       原始檔案:
       $content
+
+      圖片:
+      ${screenshotSummary.toString()}
       ''';
     // Print the message to console
     print(message);
@@ -634,7 +651,7 @@ class RecorderService {
       whisperPrompt: whisperPrompt ?? '',
     );
     // Add screenshots to the final record result
-    for (var screenshot in screenshots) {
+    for (var screenshot in usedScreenshots) {
       finalRecordResult.addScreenshot(
           screenshot['path']!, screenshot['timestamp']!);
     }
@@ -696,8 +713,31 @@ class RecorderService {
       print("Not recording. Screenshot not added.");
       return;
     }
-    screenshots.add({'path': imageFilePath, 'timestamp': timestamp});
-    print("Screenshot added: $imageFilePath at $timestamp");
+
+    if (_recordingStartTime != null) {
+      try {
+        // Parse the timestamp with the correct format
+        final screenshotTime = DateTime.parse(timestamp);
+        final elapsed = screenshotTime.difference(_recordingStartTime!);
+        final elapsedString = _formatDuration(elapsed);
+        screenshots.add({'path': imageFilePath, 'timestamp': elapsedString});
+        print("Screenshot added: $imageFilePath at $elapsedString");
+      } catch (e) {
+        print("Error parsing timestamp: $e");
+      }
+    } else {
+      print("Recording start time not available.");
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    String threeDigits(int n) => n.toString().padLeft(3, '0');
+    final hours = twoDigits(duration.inHours);
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    final milliseconds = threeDigits(duration.inMilliseconds.remainder(1000));
+    return '$hours:$minutes:$seconds,$milliseconds';
   }
 
   void dispose() {

@@ -50,12 +50,21 @@ class DatabaseHelper {
           ''');
         }
         if (oldVersion < 3) {
-          await db.execute('''
-            ALTER TABLE recordings ADD COLUMN screenshots TEXT;
-          ''');
+          await _addColumnIfNotExists(db, 'recordings', 'screenshots', 'TEXT');
         }
       },
     );
+  }
+
+  Future<void> _addColumnIfNotExists(Database db, String tableName,
+      String columnName, String columnType) async {
+    final result = await db.rawQuery('PRAGMA table_info($tableName)');
+    final columnExists = result.any((column) => column['name'] == columnName);
+
+    if (!columnExists) {
+      await db
+          .execute('ALTER TABLE $tableName ADD COLUMN $columnName $columnType');
+    }
   }
 
   Future<RecordResult> insertRecording(RecordResult record) async {
@@ -102,7 +111,7 @@ class DatabaseHelper {
   Future<void> deleteRecording(int id) async {
     final db = await database;
 
-    // Retrieve the recording to get the filePath
+    // Retrieve the recording to get the filePath and screenshots
     final List<Map<String, dynamic>> result = await db.query(
       'recordings',
       where: 'id = ?',
@@ -113,11 +122,22 @@ class DatabaseHelper {
     if (result.isNotEmpty) {
       final RecordResult record = RecordResult.fromJson(result.first);
 
-      // Check if the file exists and delete it
+      // Check if the original audio file exists and delete it
       if (record.filePath != null && record.filePath!.isNotEmpty) {
         final file = File(record.filePath!);
         if (await file.exists()) {
           await file.delete();
+        }
+      }
+
+      // Delete all screenshot files
+      for (var screenshot in record.screenshots) {
+        final screenshotPath = screenshot['path'];
+        if (screenshotPath != null && screenshotPath.isNotEmpty) {
+          final file = File(screenshotPath);
+          if (await file.exists()) {
+            await file.delete();
+          }
         }
       }
 
