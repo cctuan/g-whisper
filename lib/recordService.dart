@@ -122,9 +122,44 @@ class RecorderService {
   Future<void> toggleRecording() async {
     if (_isProcessing) {
       setProcessing(false);
+      // Form the RecordResult with available data
+      String formattedDate =
+          DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+      String? filePath = _recordedFilePath;
+      List<Map<String, String>> usedScreenshots = screenshots;
+
+      // Prepare the message string according to the specified format
+      String message = '''
+        $formattedDate
+
+        原始檔案:
+        ${filePath ?? ''}
+
+        圖片:
+        ${usedScreenshots.map((screenshot) => 'image time: ${screenshot['timestamp']}, image path:${screenshot['path']}').join('\n')}
+        ''';
+      // Print the message to console
+      print(message);
+
+      RecordResult finalRecordResult = RecordResult(
+        originalText: '',
+        processedText: '',
+        timestamp: formattedDate,
+        filePath: filePath ?? '',
+        promptText: '',
+        whisperPrompt: '',
+      );
+      // Add screenshots to the final record result
+      for (var screenshot in usedScreenshots) {
+        finalRecordResult.addScreenshot(
+            screenshot['path']!, screenshot['timestamp']!);
+      }
+
+      onRecordCompleteReturn?.call(finalRecordResult);
       await cancelRecording();
       return;
     }
+
     if (_isRecording) {
       await stopRecording();
     } else {
@@ -284,7 +319,7 @@ class RecorderService {
       }
 
       // 删除临时文件
-      if (settings?['store_original_audio'] == false) {
+      if (settings?['store_original_audio'] == false && isProcessing == true) {
         await audioFile.delete();
       }
 
@@ -578,10 +613,11 @@ class RecorderService {
     }
 
     int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
-    PromptItem selectedPrompt =
-        recordResult != null && recordResult.promptText != null
-            ? PromptItem(prompt: recordResult.promptText, name: "custom prompt")
-            : prompts[defaultPromptIndex];
+    PromptItem selectedPrompt = recordResult != null &&
+            recordResult.promptText != null &&
+            recordResult.promptText.isNotEmpty
+        ? PromptItem(prompt: recordResult.promptText, name: "custom prompt")
+        : prompts[defaultPromptIndex];
 
     String promptTemplate = selectedPrompt.prompt;
     if (defaultPromptIndex >= prompts.length &&

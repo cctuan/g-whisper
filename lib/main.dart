@@ -245,65 +245,6 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     });
   }
 
-  void _handleScreenshotTaken(
-      Uint8List? croppedImageBytes, String timestamp) async {
-    if (croppedImageBytes != null) {
-      print('Cropped image bytes: $croppedImageBytes , timestamp: $timestamp');
-      // String croppedImagePath = '/path/to/save/cropped_screenshot_$timestamp.png';
-      // File imgFile = File(croppedImagePath);
-      // await imgFile.writeAsBytes(croppedImageBytes);
-
-      // RecordResult? currentRecord = _recorderService.currentRecord;
-      // if (currentRecord != null) {
-      //   currentRecord.screenshots.add({
-      //     'path': croppedImagePath,
-      //     'timestamp': timestamp,
-      //   });
-
-      //   await DatabaseHelper().updateRecording(currentRecord);
-      //   setState(() {});
-      // }
-    }
-  }
-  // Future<void> _captureScreenshot() async {
-  //   String timestamp = DateTime.now().toIso8601String();
-  //   String screenshotPath = '/path/to/save/screenshot_$timestamp.png';
-
-  //   try {
-  //     screenshotController.capture().then((Uint8List? image) async {
-  //       if (image != null) {
-  //         File imgFile = File(screenshotPath);
-  //         await imgFile.writeAsBytes(image);
-
-  //         await Navigator.push(
-  //           context,
-  //           MaterialPageRoute(
-  //             builder: (context) => Scaffold(
-  //               appBar: AppBar(title: Text('Crop Image')),
-  //               body: Cropper(
-  //                 cropperKey: _cropperKey,
-  //                 image: image,
-  //                 onCropped: (croppedImage) async {
-  //                   String croppedImagePath =
-  //                       '/path/to/save/cropped_screenshot_$timestamp.png';
-  //                   File croppedImageFile = File(croppedImagePath);
-  //                   await croppedImageFile.writeAsBytes(croppedImage);
-
-  //                   _recorderService.addScreenshot(croppedImagePath, timestamp);
-  //                   setState(() {});
-  //                   Navigator.pop(context); // Close the cropper screen
-  //                 },
-  //               ),
-  //             ),
-  //           ),
-  //         );
-  //       }
-  //     });
-  //   } catch (e) {
-  //     print('Failed to capture screenshot: $e');
-  //   }
-  // }
-
   Future<void> saveSettings(String key, String prompt) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('openai_key', key);
@@ -675,6 +616,9 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                     TextEditingController(
                                         text: recordResult.whisperPrompt);
                                 FocusNode processedTextFocusNode = FocusNode();
+                                bool isRecordProcessed =
+                                    !(recordResult.processedText == null ||
+                                        recordResult.processedText.isEmpty);
 
                                 // 添加焦点监听器
                                 originalTextFocusNode.addListener(() {
@@ -702,198 +646,258 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                   margin: EdgeInsets.symmetric(
                                       horizontal: 10.0, vertical: 6.0),
                                   child: ExpansionTile(
-                                    title: Text('${recordResult.timestamp}'),
-                                    subtitle: Text(
-                                      recordResult.processedText.length > 50
-                                          ? '${recordResult.processedText.substring(0, 50)}...'
-                                          : recordResult.processedText,
-                                    ),
-                                    backgroundColor: Colors.grey[200],
-                                    children: <Widget>[
-                                      ExpansionTile(
-                                          title: const Text(
-                                            '細節內容',
-                                            style: TextStyle(
-                                              fontSize: 20, // 更大的字体尺寸
-                                              fontWeight:
-                                                  FontWeight.bold, // 加粗字体
-                                            ),
-                                          ),
-                                          children: <Widget>[
-                                            ExpansionTile(
-                                              title: const Text(
-                                                '原始音檔文字',
-                                                style: TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.black87),
-                                              ),
-                                              children: <Widget>[
-                                                TextField(
-                                                  controller:
-                                                      originalTextController,
-                                                  focusNode:
-                                                      originalTextFocusNode,
+                                    title: isRecordProcessed
+                                        ? Text('${recordResult.timestamp}')
+                                        : Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '${recordResult.timestamp} - This recording has not been processed completely.',
                                                   style: TextStyle(
-                                                      color: Colors.black,
-                                                      fontSize: 16),
-                                                  cursorColor: Colors.blue,
-                                                  decoration: InputDecoration(
-                                                    border: InputBorder
-                                                        .none, // 无边框，根据需要选择合适的边框样式
-                                                  ),
-                                                  maxLines: null, // 允许无限行
+                                                      color: Colors.red),
                                                 ),
-                                              ],
-                                            ),
-                                            buildPromptDropdown(
-                                                recordResult.promptText,
-                                                _recorderService.getPrompts(),
-                                                (selectedPrompt) {
-                                              setState(() {
-                                                recordResult.promptText =
-                                                    selectedPrompt; // Update the current prompt text
-                                                _recorderService
-                                                    .handleExistingPrompt(
-                                                        selectedPrompt,
-                                                        recordResult,
-                                                        originalIndex);
-                                              });
-                                            }),
-                                            if (recordResult.filePath != null &&
-                                                recordResult
-                                                    .filePath!.isNotEmpty)
+                                              ),
+                                              IconButton(
+                                                onPressed: () {
+                                                  _recorderService.rerun(
+                                                      recordResult,
+                                                      originalIndex);
+                                                },
+                                                icon: Icon(Icons.refresh,
+                                                    color: Colors.blue),
+                                              ),
+                                              IconButton(
+                                                onPressed: () {
+                                                  deleteRecording(
+                                                      originalIndex);
+                                                },
+                                                icon: Icon(Icons.delete,
+                                                    color: Colors.red),
+                                              ),
+                                            ],
+                                          ),
+                                    subtitle: isRecordProcessed
+                                        ? Text(
+                                            recordResult.processedText.length >
+                                                    50
+                                                ? '${recordResult.processedText.substring(0, 50)}...'
+                                                : recordResult.processedText,
+                                          )
+                                        : null,
+                                    backgroundColor: Colors.grey[200],
+                                    children: !isRecordProcessed
+                                        ? []
+                                        : <Widget>[
+                                            ExpansionTile(
+                                                title: const Text(
+                                                  '細節內容',
+                                                  style: TextStyle(
+                                                    fontSize: 20, // 更大的字体尺寸
+                                                    fontWeight:
+                                                        FontWeight.bold, // 加粗字体
+                                                  ),
+                                                ),
+                                                children: <Widget>[
+                                                  ExpansionTile(
+                                                    title: const Text(
+                                                      '原始音檔文字',
+                                                      style: TextStyle(
+                                                          fontSize: 18,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color:
+                                                              Colors.black87),
+                                                    ),
+                                                    children: <Widget>[
+                                                      TextField(
+                                                        controller:
+                                                            originalTextController,
+                                                        focusNode:
+                                                            originalTextFocusNode,
+                                                        style: TextStyle(
+                                                            color: Colors.black,
+                                                            fontSize: 16),
+                                                        cursorColor:
+                                                            Colors.blue,
+                                                        decoration:
+                                                            InputDecoration(
+                                                          border: InputBorder
+                                                              .none, // 无边框，根据需要选择合适的边框样式
+                                                        ),
+                                                        maxLines: null, // 允许无限行
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  buildPromptDropdown(
+                                                      recordResult.promptText,
+                                                      _recorderService
+                                                          .getPrompts(),
+                                                      (selectedPrompt) {
+                                                    setState(() {
+                                                      recordResult.promptText =
+                                                          selectedPrompt; // Update the current prompt text
+                                                      _recorderService
+                                                          .handleExistingPrompt(
+                                                              selectedPrompt,
+                                                              recordResult,
+                                                              originalIndex);
+                                                    });
+                                                  }),
+                                                  if (recordResult.filePath !=
+                                                          null &&
+                                                      recordResult
+                                                          .filePath!.isNotEmpty)
+                                                    ListTile(
+                                                      title: const Text(
+                                                        '專有詞修正（Optional -  會覆蓋 default settings)',
+                                                        style: TextStyle(
+                                                            fontSize: 15,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color:
+                                                                Colors.black87),
+                                                      ),
+                                                      subtitle: TextField(
+                                                        controller:
+                                                            whisperPromptController,
+                                                        style: TextStyle(
+                                                            color: Colors.black,
+                                                            fontSize: 16),
+                                                        cursorColor:
+                                                            Colors.blue,
+                                                        decoration:
+                                                            InputDecoration(
+                                                          border:
+                                                              OutlineInputBorder(), // Use an outline border
+                                                          hintText:
+                                                              'ex: LIAM HUB, IAM',
+                                                        ),
+                                                        maxLines: null,
+                                                      ),
+                                                      trailing: IconButton(
+                                                        icon:
+                                                            Icon(Icons.refresh),
+                                                        onPressed: () {
+                                                          String whisperPrompt =
+                                                              whisperPromptController
+                                                                  .text;
+                                                          recordResult
+                                                                  .whisperPrompt =
+                                                              whisperPrompt;
+                                                          saveWhisperPrompt(
+                                                              recordResult,
+                                                              originalIndex);
+                                                        },
+                                                      ),
+                                                    ),
+                                                  ListTile(
+                                                    title: const Text(
+                                                      'AI整理檔案（可編輯）',
+                                                      style: TextStyle(
+                                                          fontSize: 18,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color:
+                                                              Colors.black87),
+                                                    ),
+                                                    subtitle: Column(
+                                                      children: <Widget>[
+                                                        Container(
+                                                          padding:
+                                                              EdgeInsets.all(
+                                                                  8.0),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            border: Border.all(
+                                                                color: Colors
+                                                                    .grey),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        5),
+                                                          ),
+                                                          child: TextField(
+                                                            controller:
+                                                                processedTextController,
+                                                            focusNode:
+                                                                processedTextFocusNode,
+                                                            maxLines: 5,
+                                                            style: TextStyle(
+                                                                color: Colors
+                                                                    .black,
+                                                                fontSize: 16),
+                                                            decoration:
+                                                                InputDecoration
+                                                                    .collapsed(
+                                                                        hintText:
+                                                                            "Edit Processed Text"),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ]),
+                                            if (!processedTextFocusNode
+                                                .hasFocus)
                                               ListTile(
                                                 title: const Text(
-                                                  '專有詞修正（Optional -  會覆蓋 default settings)',
+                                                  '會議總結',
                                                   style: TextStyle(
-                                                      fontSize: 15,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.black87),
-                                                ),
-                                                subtitle: TextField(
-                                                  controller:
-                                                      whisperPromptController,
-                                                  style: TextStyle(
-                                                      color: Colors.black,
-                                                      fontSize: 16),
-                                                  cursorColor: Colors.blue,
-                                                  decoration: InputDecoration(
-                                                    border:
-                                                        OutlineInputBorder(), // Use an outline border
-                                                    hintText:
-                                                        'ex: LIAM HUB, IAM',
+                                                    fontSize: 20, // 更大的字体尺寸
+                                                    fontWeight:
+                                                        FontWeight.bold, // 加粗字体
                                                   ),
-                                                  maxLines: null,
                                                 ),
-                                                trailing: IconButton(
-                                                  icon: Icon(Icons.refresh),
+                                                subtitle: Container(
+                                                  padding: EdgeInsets.all(8.0),
+                                                  child: MarkdownBody(
+                                                    data:
+                                                        processedTextController
+                                                            .text,
+                                                  ),
+                                                ),
+                                              ),
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.end,
+                                              children: [
+                                                IconButton(
+                                                  icon: Icon(Icons.chat),
                                                   onPressed: () {
-                                                    String whisperPrompt =
-                                                        whisperPromptController
-                                                            .text;
-                                                    recordResult.whisperPrompt =
-                                                        whisperPrompt;
-                                                    saveWhisperPrompt(
-                                                        recordResult,
+                                                    // Navigate to chat page with the current record
+                                                    showChatPage([
+                                                      recordResult
+                                                    ], "${recordResult.processedText.substring(0, 100)}... \n\n\n Ask anything detail about this meeting");
+                                                  },
+                                                ),
+                                                IconButton(
+                                                  icon: Icon(Icons.share),
+                                                  onPressed: () {
+                                                    // 分享操作
+                                                    shareRecording(
+                                                        recordResult);
+                                                  },
+                                                ),
+                                                IconButton(
+                                                  icon:
+                                                      Icon(Icons.content_copy),
+                                                  onPressed: () {
+                                                    copyRecording(recordResult);
+                                                  },
+                                                ),
+                                                IconButton(
+                                                  icon: Icon(Icons.delete),
+                                                  onPressed: () {
+                                                    // 删除操作
+                                                    deleteRecording(
                                                         originalIndex);
                                                   },
                                                 ),
-                                              ),
-                                            ListTile(
-                                              title: const Text(
-                                                'AI整理檔案（可編輯）',
-                                                style: TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.black87),
-                                              ),
-                                              subtitle: Column(
-                                                children: <Widget>[
-                                                  Container(
-                                                    padding:
-                                                        EdgeInsets.all(8.0),
-                                                    decoration: BoxDecoration(
-                                                      border: Border.all(
-                                                          color: Colors.grey),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              5),
-                                                    ),
-                                                    child: TextField(
-                                                      controller:
-                                                          processedTextController,
-                                                      focusNode:
-                                                          processedTextFocusNode,
-                                                      maxLines: 5,
-                                                      style: TextStyle(
-                                                          color: Colors.black,
-                                                          fontSize: 16),
-                                                      decoration: InputDecoration
-                                                          .collapsed(
-                                                              hintText:
-                                                                  "Edit Processed Text"),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                              ],
                                             ),
-                                          ]),
-                                      if (!processedTextFocusNode.hasFocus)
-                                        ListTile(
-                                          title: const Text(
-                                            '會議總結',
-                                            style: TextStyle(
-                                              fontSize: 20, // 更大的字体尺寸
-                                              fontWeight:
-                                                  FontWeight.bold, // 加粗字体
-                                            ),
-                                          ),
-                                          subtitle: Container(
-                                            padding: EdgeInsets.all(8.0),
-                                            child: MarkdownBody(
-                                              data:
-                                                  processedTextController.text,
-                                            ),
-                                          ),
-                                        ),
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.end,
-                                        children: [
-                                          IconButton(
-                                            icon: Icon(Icons.chat),
-                                            onPressed: () {
-                                              // Navigate to chat page with the current record
-                                              showChatPage([
-                                                recordResult
-                                              ], "${recordResult.processedText.substring(0, 100)}... \n\n\n Ask anything detail about this meeting");
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: Icon(Icons.share),
-                                            onPressed: () {
-                                              // 分享操作
-                                              shareRecording(recordResult);
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: Icon(Icons.content_copy),
-                                            onPressed: () {
-                                              copyRecording(recordResult);
-                                            },
-                                          ),
-                                          IconButton(
-                                            icon: Icon(Icons.delete),
-                                            onPressed: () {
-                                              // 删除操作
-                                              deleteRecording(originalIndex);
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    ],
+                                          ],
                                   ),
                                 );
                               },
