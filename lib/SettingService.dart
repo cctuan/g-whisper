@@ -31,6 +31,10 @@ class SettingsService {
     String openaiCompletionBaseUrl =
         prefs.getString('openai_completion_base_url') ?? '';
     String openaiAudioBaseUrl = prefs.getString('openai_audio_base_url') ?? '';
+    // 新增的Wiki設置
+    String wikiApiToken = prefs.getString('wiki_api_token') ?? '';
+    String wikiPageId = prefs.getString('wiki_page_id') ?? '';
+    String spaceId = prefs.getString('space_id') ?? '';
 
     return {
       'openai_model': openAiModel,
@@ -50,6 +54,9 @@ class SettingsService {
       'store_original_audio': storeOriginalAudio,
       'openai_completion_base_url': openaiCompletionBaseUrl,
       'openai_audio_base_url': openaiAudioBaseUrl,
+      'wiki_api_token': wikiApiToken,
+      'wiki_page_id': wikiPageId,
+      'space_id': spaceId,
     };
   }
 
@@ -71,6 +78,9 @@ class SettingsService {
     bool? storeOriginalAudio,
     String? openaiCompletionBaseUrl,
     String? openaiAudioBaseUrl,
+    String wikiApiToken,
+    String wikiPageId,
+    String spaceId,
   ) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('openai_key', openAiKey);
@@ -89,6 +99,9 @@ class SettingsService {
     await prefs.setString(
         'openai_completion_base_url', openaiCompletionBaseUrl ?? '');
     await prefs.setString('openai_audio_base_url', openaiAudioBaseUrl ?? '');
+    await prefs.setString('wiki_api_token', wikiApiToken);
+    await prefs.setString('wiki_page_id', wikiPageId);
+    await prefs.setString('space_id', spaceId);
     List<String> promptsJson =
         prompts.map((prompt) => json.encode(prompt.toJson())).toList();
     await prefs.setStringList('prompts', promptsJson);

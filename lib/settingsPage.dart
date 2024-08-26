@@ -36,6 +36,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool storeOriginalAudio = false;
   String llmChoice = 'openai'; // 'openai', 'ollama', 'custom', 'llama_cpp'
 
+  final TextEditingController wikiApiTokenController = TextEditingController();
+  final TextEditingController wikiPageIdController = TextEditingController();
+  final TextEditingController spaceIdController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -80,6 +84,9 @@ class _SettingsPageState extends State<SettingsPage> {
       llmChoice = settings['llm_choice'] ?? 'openai';
       defaultPromptIndex = settings['defaultPromptIndex'] ?? 0;
       storeOriginalAudio = settings['store_original_audio'] ?? false;
+      wikiApiTokenController.text = settings['wiki_api_token'] ?? '';
+      wikiPageIdController.text = settings['wiki_page_id'] ?? '';
+      spaceIdController.text = settings['space_id'] ?? '';
     });
   }
 
@@ -102,6 +109,9 @@ class _SettingsPageState extends State<SettingsPage> {
       storeOriginalAudio,
       openaiCompletionBaseUrlController.text,
       openaiAudioBaseUrlController.text,
+      wikiApiTokenController.text,
+      wikiPageIdController.text,
+      spaceIdController.text,
     );
     Navigator.pop(context);
   }
@@ -363,6 +373,32 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 20),
             Text(
+              "Wiki Settings",
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            TextField(
+              controller: wikiApiTokenController,
+              decoration: InputDecoration(
+                labelText: 'Wiki API Token',
+                helperText: 'Enter your Wiki API Token here',
+              ),
+            ),
+            TextField(
+              controller: wikiPageIdController,
+              decoration: InputDecoration(
+                labelText: 'Wiki Page ID',
+                helperText: 'Enter the Wiki Page ID here',
+              ),
+            ),
+            TextField(
+              controller: spaceIdController,
+              decoration: InputDecoration(
+                labelText: 'Space ID',
+                helperText: 'Enter the Space ID here',
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
               "Prompt Settings",
               style: Theme.of(context).textTheme.headlineMedium,
             ),
@@ -430,6 +466,9 @@ class _SettingsPageState extends State<SettingsPage> {
     huggingfaceGgufController.dispose();
     whisperPromptController.dispose();
     promptController.dispose();
+    wikiApiTokenController.dispose();
+    wikiPageIdController.dispose();
+    spaceIdController.dispose();
     super.dispose();
   }
 }

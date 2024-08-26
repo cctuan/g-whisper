@@ -16,6 +16,7 @@ import './PromptItem.dart';
 import './recordResult.dart';
 import './SettingService.dart';
 import './chatPage.dart';
+import './WikiService.dart';
 
 GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
@@ -49,6 +50,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   late final ScreenshotService _screenshotService;
   late HotKey _hotKey;
   late HotKey _screenshotHotKey;
+  late final WikiService _wikiService;
   bool isSettingsDialogOpen =
       false; // Flag to track if the settings dialog is open
   List<RecordResult> recordLogs = []; // 存储录音记录的列表
@@ -72,6 +74,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   }
 
   Future<void> _initializeRecorderService() async {
+    _wikiService = WikiService(settingsService);
+    // await _wikiService.initialize();
     recordLogs = widget.initialRecordLogs;
     filteredRecordLogs = recordLogs.asMap().entries.toList();
     _recorderService = RecorderService();
@@ -107,6 +111,15 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
           recordLogs.insert(0, newRecord); // Insert new record at the beginning
           hideMessage();
         });
+      }
+      bool isWikiServiceEnabled = await _wikiService.isEnabled();
+      if (isWikiServiceEnabled) {
+        bool syncSuccess = await _wikiService.syncToWiki(result);
+        if (syncSuccess) {
+          showMessage('Successfully synced to Wiki');
+        } else {
+          showMessage('Failed to sync to Wiki. Please check your settings.');
+        }
       }
       _filterRecords(); // 更新过滤结果
     };
