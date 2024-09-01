@@ -407,38 +407,52 @@ class _SettingsPageState extends State<SettingsPage> {
               physics: NeverScrollableScrollPhysics(),
               itemCount: prompts.length,
               itemBuilder: (context, index) {
-                return ListTile(
-                  trailing: IconButton(
-                    icon: Icon(Icons.delete),
-                    onPressed: () => removePrompt(index),
-                  ),
-                  title: TextField(
-                    controller:
-                        TextEditingController(text: prompts[index].name),
-                    decoration: InputDecoration(labelText: 'Name'),
-                    onChanged: (value) {
-                      prompts[index].name = value;
-                    },
-                  ),
-                  subtitle: TextField(
-                    controller:
-                        TextEditingController(text: prompts[index].prompt),
-                    decoration: InputDecoration(labelText: 'Prompt'),
-                    onChanged: (value) {
-                      prompts[index].prompt = value;
-                    },
-                    maxLines: null,
-                    keyboardType: TextInputType.multiline,
-                  ),
-                  leading: Radio<int>(
-                    value: index,
-                    groupValue: defaultPromptIndex,
-                    onChanged: (int? value) {
-                      setState(() {
-                        defaultPromptIndex = value;
-                      });
-                    },
-                  ),
+                return Column(
+                  children: [
+                    ListTile(
+                      trailing: IconButton(
+                        icon: Icon(Icons.delete),
+                        onPressed: () => removePrompt(index),
+                      ),
+                      title: TextField(
+                        controller:
+                            TextEditingController(text: prompts[index].name),
+                        decoration: InputDecoration(labelText: 'Name'),
+                        onChanged: (value) {
+                          prompts[index].name = value;
+                        },
+                      ),
+                      subtitle: TextField(
+                        controller:
+                            TextEditingController(text: prompts[index].prompt),
+                        decoration: InputDecoration(labelText: 'Prompt'),
+                        onChanged: (value) {
+                          prompts[index].prompt = value;
+                        },
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                      ),
+                      leading: Radio<int>(
+                        value: index,
+                        groupValue: defaultPromptIndex,
+                        onChanged: (int? value) {
+                          setState(() {
+                            defaultPromptIndex = value;
+                          });
+                        },
+                      ),
+                    ),
+                    SwitchListTile(
+                      title: Text('Enable Chapter'),
+                      value: prompts[index].enableChapter,
+                      onChanged: (bool value) {
+                        setState(() {
+                          prompts[index].enableChapter = value;
+                        });
+                      },
+                    ),
+                    const Divider(),
+                  ],
                 );
               },
             ),

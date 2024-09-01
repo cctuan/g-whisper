@@ -139,7 +139,7 @@ class RecorderService {
         ${usedScreenshots.map((screenshot) => 'image time: ${screenshot['timestamp']}, image path:${screenshot['path']}').join('\n')}
         ''';
       // Print the message to console
-      print(message);
+      // print(message);
 
       RecordResult finalRecordResult = RecordResult(
         originalText: '',
@@ -619,7 +619,7 @@ class RecorderService {
         ? PromptItem(prompt: recordResult.promptText, name: "custom prompt")
         : prompts[defaultPromptIndex];
 
-    String promptTemplate = selectedPrompt.prompt;
+    PromptItem promptTemplate = selectedPrompt;
     if (defaultPromptIndex >= prompts.length &&
         (recordResult == null || recordResult.promptText == null)) {
       print("Settings are not configured properly.");
@@ -656,8 +656,8 @@ class RecorderService {
     String finalContent =
         'image path and time:${screenshotSummary.toString()}\nCaptions:$content';
 
-    String result = await llmService!.callLlm(promptTemplate ?? '',
-        finalContent, settings?['llm_choice'], options, onStatusUpdateCallback);
+    String result = await llmService!.callLlm(promptTemplate, finalContent,
+        settings?['llm_choice'], options, onStatusUpdateCallback);
 
     // Create a date-time stamp
     String formattedDate = recordResult?.timestamp ??
@@ -677,13 +677,13 @@ class RecorderService {
       ${screenshotSummary.toString()}
       ''';
     // Print the message to console
-    print(message);
+    // print(message);
     RecordResult finalRecordResult = RecordResult(
       originalText: content,
       processedText: result,
       timestamp: formattedDate,
       filePath: filePath ?? '',
-      promptText: promptTemplate,
+      promptText: promptTemplate.prompt,
       whisperPrompt: whisperPrompt ?? '',
     );
     // Add screenshots to the final record result

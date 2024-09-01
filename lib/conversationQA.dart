@@ -67,6 +67,7 @@ class ConversationalQA {
       documents = textSplitter.createDocuments(textSplitter.splitText(text));
     } else {
       documents = recordLogs
+          .where((log) => log.processedText.isNotEmpty)
           .map((log) => Document(
                 pageContent: log.processedText,
                 metadata: {'id': log.id, 'timestamp': log.timestamp},

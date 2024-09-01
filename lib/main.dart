@@ -253,9 +253,13 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
   }
 
   void _unregisterScreenshotHotKey() async {
-    hotKeyManager.unregister(_screenshotHotKey).catchError((error) {
-      print('Failed to unregister screenshot hotkey: $error');
-    });
+    try {
+      hotKeyManager.unregister(_screenshotHotKey).catchError((error) {
+        print('Failed to unregister screenshot hotkey: $error');
+      });
+    } catch (e) {
+      print('Failed to unregister screenshot hotkey: $e');
+    }
   }
 
   Future<void> saveSettings(String key, String prompt) async {
