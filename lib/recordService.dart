@@ -557,8 +557,13 @@ class RecorderService {
   void handleExistingPrompt(
       String prompt, RecordResult recordResult, int recordIndex) async {
     setProcessing(true);
-    await _processText(recordResult.originalText, recordResult.filePath,
-        recordIndex, recordResult);
+    await _processText(
+        recordResult.originalText,
+        recordResult.filePath,
+        recordIndex,
+        recordResult,
+        prompt,
+        recordResult.whisperPrompt); // Pass the prompt here
   }
 
   void handleText(String content, String filePath) async {
@@ -571,6 +576,7 @@ class RecorderService {
   Future<void> _processText(String content, String? filePath,
       [int? recordIndex,
       RecordResult? recordResult,
+      String? customPrompt,
       String? whisperPrompt]) async {
     List<PromptItem> prompts = settings?['prompts'] ?? [];
     if (prompts.isEmpty || settings == null) {
@@ -612,21 +618,33 @@ class RecorderService {
       return;
     }
 
-    int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
-    PromptItem selectedPrompt = recordResult != null &&
-            recordResult.promptText != null &&
-            recordResult.promptText.isNotEmpty
-        ? PromptItem(prompt: recordResult.promptText, name: "custom prompt")
-        : prompts[defaultPromptIndex];
+    PromptItem selectedPrompt;
+    String promptToFind = customPrompt ?? recordResult?.promptText ?? '';
+
+    if (promptToFind.isNotEmpty) {
+      // First, try to find a matching prompt in the prompts list
+      selectedPrompt = prompts.firstWhere(
+        (item) => item.prompt == promptToFind,
+        orElse: () => PromptItem(
+          name: customPrompt != null ? "custom prompt" : "record's prompt",
+          prompt: promptToFind,
+          enableChapter: false, // Default value
+        ),
+      );
+    } else {
+      // If no custom prompt or record prompt, use the default
+      int defaultPromptIndex = settings?['defaultPromptIndex'] ?? 0;
+      if (defaultPromptIndex >= prompts.length) {
+        print("Default prompt index is out of range.");
+        setProcessing(false);
+        onStatusUpdateCallback?.call("Default prompt index is out of range.");
+        return;
+      }
+      selectedPrompt = prompts[defaultPromptIndex];
+    }
 
     PromptItem promptTemplate = selectedPrompt;
-    if (defaultPromptIndex >= prompts.length &&
-        (recordResult == null || recordResult.promptText == null)) {
-      print("Settings are not configured properly.");
-      setProcessing(false);
-      onStatusUpdateCallback?.call("Settings are not configured properly.");
-      return;
-    }
+
     LlmOptions options = LlmOptions(
       apiKey: settings?['openai_key'],
       openAiModel: settings?['openai_model'],
@@ -728,7 +746,7 @@ class RecorderService {
       print(text);
       onStatusUpdateCallback?.call('Transcribed audio successfully.');
       await _processText(text, recordResult.filePath, index, recordResult,
-          recordResult.whisperPrompt);
+          recordResult.promptText, recordResult.whisperPrompt);
     } catch (e) {
       // Handle the error more specifically if you can
       if (e is SocketException) {
