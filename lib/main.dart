@@ -28,17 +28,14 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
   await hotKeyManager.unregisterAll();
-  List<RecordResult> recordLogs = await DatabaseHelper().getRecordings();
 
-  runApp(MyApp(title: 'G Whisper dev-0.2.0', initialRecordLogs: recordLogs));
+  runApp(MyApp(title: 'G Whisper dev-0.2.1'));
   // await hotKeyManager.unregisterAll();
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp(
-      {super.key, required this.title, required this.initialRecordLogs});
+  const MyApp({super.key, required this.title});
   final String title;
-  final List<RecordResult> initialRecordLogs;
   @override
   State<MyApp> createState() => _MyHomePageState();
 }
@@ -66,17 +63,32 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
   ValueNotifier<String?> messageNotifier = ValueNotifier<String?>(null);
 
+  int selectedYear = DateTime.now().year;
+  int selectedMonth = DateTime.now().month;
+
+  bool _isInitializing = true; // Flag to track initialization status
+  bool showAllRecordings = false; // Flag to track if "All" is selected
+
   @override
   void initState() {
     super.initState();
     searchController = TextEditingController(text: searchKeyword);
-    _initializeRecorderService();
+    _initializeRecorderService().then((_) {
+      setState(() {
+        _isInitializing = false; // Set to false once initialization is complete
+      });
+    });
+  }
+
+  Future<void> _loadCurrentMonthRecordings() async {
+    recordLogs = await DatabaseHelper().getRecordingsByCurrentMonth();
+    _filterRecords();
   }
 
   Future<void> _initializeRecorderService() async {
     _wikiService = WikiService(settingsService);
     // await _wikiService.initialize();
-    recordLogs = widget.initialRecordLogs;
+    await _loadCurrentMonthRecordings();
     filteredRecordLogs = recordLogs.asMap().entries.toList();
     _recorderService = RecorderService();
     _recorderService.onRecordingStateChanged = () {
@@ -98,6 +110,10 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     _recorderService.onRecordCompleteReturn =
         (RecordResult result, [int? id]) async {
       // 在这里处理录音完成后的逻辑
+      // 在插入新录音记录之前，先将用户的视图切换到最新的 year 和 month
+      _onYearMonthSelected(
+          year: DateTime.now().year, month: DateTime.now().month);
+
       if (id == null ||
           recordLogs.indexWhere((record) => record.id == id) == -1) {
         // 如果 id 为 null 或者没有找到对应的录音记录，插入新录音记录
@@ -228,6 +244,34 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
         .catchError((error) {
       print('Failed to register hotkey: $error');
     });
+  }
+
+  void _onYearMonthSelected({int? year, int? month}) {
+    if (year == null && month == null) {
+      setState(() {
+        showAllRecordings = true; // Set flag to true when "All" is selected
+      });
+      getRecordings(); // Call to get all recordings
+    } else {
+      setState(() {
+        showAllRecordings =
+            false; // Reset flag when specific year/month is selected
+        selectedYear = year!;
+        selectedMonth = month!;
+      });
+      getRecordingsByMonth(
+          selectedMonth, selectedYear); // Call to get recordings by month/year
+    }
+  }
+
+  void getRecordings() async {
+    recordLogs = await DatabaseHelper().getRecordings();
+    _filterRecords();
+  }
+
+  void getRecordingsByMonth(int month, int year) async {
+    recordLogs = await DatabaseHelper().getRecordingsByMonth(month, year);
+    _filterRecords();
   }
 
   void _handleScreenshotHotKey() {
@@ -434,6 +478,16 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
   @override
   Widget build(BuildContext context) {
+    if (_isInitializing) {
+      return Center(
+        child: SizedBox(
+          width: 50, // Set the width of the loading indicator
+          height: 50, // Set the height of the loading indicator
+          child:
+              CircularProgressIndicator(), // Show loading indicator while initializing
+        ),
+      );
+    }
     return GestureDetector(
         onTap: hideSearchBar,
         child: MaterialApp(
@@ -609,6 +663,60 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                   );
                                 },
                               ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text('Show All'),
+                              Checkbox(
+                                value: showAllRecordings,
+                                onChanged: (bool? value) {
+                                  setState(() {
+                                    showAllRecordings = value ?? false;
+                                    if (showAllRecordings) {
+                                      getRecordings(); // Call to get all recordings
+                                    } else {
+                                      getRecordingsByMonth(
+                                          selectedMonth, selectedYear);
+                                    }
+                                  });
+                                },
+                              ),
+                              if (!showAllRecordings) ...[
+                                Text('Year:'),
+                                DropdownButton<int>(
+                                  value: selectedYear,
+                                  onChanged: (int? year) =>
+                                      _onYearMonthSelected(year: year),
+                                  items: [
+                                    DropdownMenuItem<int>(
+                                      value: null,
+                                      child: Text('All'), // Add "All" option
+                                    ),
+                                    ...List.generate(2024, (index) => index + 1)
+                                        .map((int year) {
+                                      return DropdownMenuItem<int>(
+                                        value: year,
+                                        child: Text(year.toString()),
+                                      );
+                                    }).toList(),
+                                  ],
+                                ),
+                                // Show month dropdown only if not "All"
+                                Text('Month:'),
+                                DropdownButton<int>(
+                                  value: selectedMonth,
+                                  onChanged: (int? month) =>
+                                      _onYearMonthSelected(month: month),
+                                  items: List.generate(12, (index) => index + 1)
+                                      .map((int month) {
+                                    return DropdownMenuItem<int>(
+                                      value: month,
+                                      child: Text(month.toString()),
+                                    );
+                                  }).toList(),
+                                ),
+                              ]
                             ],
                           ),
                           Expanded(

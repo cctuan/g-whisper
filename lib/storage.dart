@@ -159,6 +159,11 @@ class DatabaseHelper {
     });
   }
 
+  Future<List<RecordResult>> getRecordingsByCurrentMonth() async {
+    final now = DateTime.now();
+    return await getRecordingsByMonth(now.month, now.year);
+  }
+
   Future<List<RecordResult>> getRecordingsByMonth(int month, int year) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
