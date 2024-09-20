@@ -23,7 +23,7 @@ class AudioPart {
 }
 
 typedef RecordCompleteCallback = void Function(RecordResult result,
-    [int? index, int? recordId]);
+    [int? recordId]);
 typedef RecordAmplitudeChange = void Function(bool haVoice);
 typedef StatusUpdateCallback = void Function(String status);
 
@@ -711,8 +711,7 @@ class RecorderService {
     }
     setProcessing(false);
     onStatusUpdateCallback?.call("Summary processed successfully.");
-    onRecordCompleteReturn?.call(
-        finalRecordResult, recordIndex, recordResult?.id);
+    onRecordCompleteReturn?.call(finalRecordResult, recordResult?.id);
   }
 
   Future<void> rerun(RecordResult recordResult, int index) async {

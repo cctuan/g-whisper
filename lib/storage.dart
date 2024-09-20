@@ -158,4 +158,17 @@ class DatabaseHelper {
       return RecordResult.fromJson(maps[i]);
     });
   }
+
+  Future<List<RecordResult>> getRecordingsByMonth(int month, int year) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'recordings',
+      where: 'strftime("%m", timestamp) = ? AND strftime("%Y", timestamp) = ?',
+      whereArgs: [month.toString().padLeft(2, '0'), year.toString()],
+    );
+
+    return List.generate(maps.length, (i) {
+      return RecordResult.fromJson(maps[i]);
+    });
+  }
 }

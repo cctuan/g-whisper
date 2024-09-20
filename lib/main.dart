@@ -96,19 +96,23 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     await _recorderService.init();
     setState(() => {});
     _recorderService.onRecordCompleteReturn =
-        (RecordResult result, [int? index, int? id]) async {
+        (RecordResult result, [int? id]) async {
       // 在这里处理录音完成后的逻辑
-      if (index != null && index >= 0 && index < recordLogs.length) {
-        DatabaseHelper().updateRecording(result, id);
-
+      if (id == null ||
+          recordLogs.indexWhere((record) => record.id == id) == -1) {
+        // 如果 id 为 null 或者没有找到对应的录音记录，插入新录音记录
+        final newRecord = await DatabaseHelper().insertRecording(result);
         setState(() {
-          recordLogs[index] = result; // Replace the existing entry at the index
+          recordLogs.insert(0, newRecord); // 将新记录插入到开头
           hideMessage();
         });
       } else {
-        final newRecord = await DatabaseHelper().insertRecording(result);
+        // 使用 id 查找对应的录音记录
+        int index = recordLogs.indexWhere((record) => record.id == id);
+        // 更新现有录音记录
+        DatabaseHelper().updateRecording(result, id);
         setState(() {
-          recordLogs.insert(0, newRecord); // Insert new record at the beginning
+          recordLogs[index] = result; // 替换现有的录音记录
           hideMessage();
         });
       }
@@ -327,12 +331,12 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     });
   }
 
-  void deleteRecording(int originalIndex) {
-    RecordResult record = recordLogs[originalIndex];
-    recordLogs.removeAt(originalIndex);
+  void deleteRecording(int recordId) {
+    RecordResult record = recordLogs.firstWhere((r) => r.id == recordId);
+    recordLogs.remove(record);
     _filterRecords();
-    print('Delete Recording Id - ${record.id}');
-    DatabaseHelper().deleteRecording(record.id!);
+    print('Delete Recording Id - $recordId');
+    DatabaseHelper().deleteRecording(recordId);
     setState(() {});
   }
 
@@ -342,14 +346,16 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     Share.share(content);
   }
 
-  void saveRecordResult(RecordResult recordResult, int originalIndex) {
+  void saveRecordResult(RecordResult recordResult) {
     setState(() {
-      recordLogs[originalIndex].originalText = recordResult.originalText;
-      recordLogs[originalIndex].processedText = recordResult.processedText;
-      DatabaseHelper().updateRecording(recordLogs[originalIndex]);
+      int index = recordLogs.indexWhere((r) => r.id == recordResult.id);
+      if (index != -1) {
+        recordLogs[index].originalText = recordResult.originalText;
+        recordLogs[index].processedText = recordResult.processedText;
+        DatabaseHelper().updateRecording(recordLogs[index]);
+      }
     });
     _filterRecords();
-    // 保存逻辑，可能是更新状态、发送到服务器等
     print(
         'Saved: Original Text = ${recordResult.originalText}, Processed Text = ${recordResult.processedText}');
   }
@@ -361,7 +367,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     print('Saved: whisperPrompt = ${recordResult.whisperPrompt}');
   }
 
-  void editRecording(RecordResult recordResult, int originalIndex) {
+  void editRecording(RecordResult recordResult) {
     BuildContext context = navigatorKey.currentState!.overlay!.context;
     TextEditingController textEditingController =
         TextEditingController(text: recordResult.originalText);
@@ -373,21 +379,14 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
           title: const Text("Edit Recording"),
           content: TextFormField(
             controller: textEditingController,
-            // The onChanged isn't necessary if you're updating the text only after the button press
-            // onChanged: (value) {},
           ),
           actions: <Widget>[
             TextButton(
               child: const Text("Save"),
               onPressed: () {
-                // Update the logic here to save the edited text
-                setState(() {
-                  recordLogs[originalIndex].originalText =
-                      textEditingController.text;
-                  DatabaseHelper().updateRecording(recordLogs[originalIndex]);
-                });
+                recordResult.originalText = textEditingController.text;
+                saveRecordResult(recordResult); // Use the updated method
                 Navigator.of(context).pop(); // Close the dialog
-                _filterRecords();
               },
             ),
             TextButton(
@@ -643,8 +642,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                     // 更新数据并保存
                                     recordResult.originalText =
                                         originalTextController.text;
-                                    saveRecordResult(
-                                        recordResult, originalIndex);
+                                    saveRecordResult(recordResult);
                                   }
                                 });
 
@@ -653,8 +651,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                     // 更新数据并保存
                                     recordResult.processedText =
                                         processedTextController.text;
-                                    saveRecordResult(
-                                        recordResult, originalIndex);
+                                    saveRecordResult(recordResult);
                                   }
                                 });
 
@@ -680,7 +677,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                                 onPressed: () {
                                                   _recorderService.rerun(
                                                       recordResult,
-                                                      originalIndex);
+                                                      recordResult.id!);
                                                 },
                                                 icon: Icon(Icons.refresh,
                                                     color: Colors.blue),
@@ -688,7 +685,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                               IconButton(
                                                 onPressed: () {
                                                   deleteRecording(
-                                                      originalIndex);
+                                                      recordResult.id!);
                                                 },
                                                 icon: Icon(Icons.delete,
                                                     color: Colors.red),
@@ -759,7 +756,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                                           .handleExistingPrompt(
                                                               selectedPrompt,
                                                               recordResult,
-                                                              originalIndex);
+                                                              recordResult.id!);
                                                     });
                                                   }),
                                                   if (recordResult.filePath !=
@@ -805,7 +802,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                                               whisperPrompt;
                                                           saveWhisperPrompt(
                                                               recordResult,
-                                                              originalIndex);
+                                                              recordResult.id!);
                                                         },
                                                       ),
                                                     ),
@@ -909,7 +906,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                                   onPressed: () {
                                                     // 删除操作
                                                     deleteRecording(
-                                                        originalIndex);
+                                                        recordResult.id!);
                                                   },
                                                 ),
                                               ],
