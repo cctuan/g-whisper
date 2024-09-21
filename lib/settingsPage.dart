@@ -518,9 +518,30 @@ class _SettingsPageState extends State<SettingsPage> {
           textAlign: TextAlign.left,
         ),
         SizedBox(height: 10),
-        Text(
-          '使用教學：請於 https://workers-hub.enterprise.slack.com/archives/C0749M8BCKT 下載最新的 g_record_helper.zip 檔案。',
+        RichText(
           textAlign: TextAlign.left,
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: '請於 ',
+                style: TextStyle(color: Colors.black),
+              ),
+              TextSpan(
+                text: 'Download Link',
+                style: TextStyle(
+                    color: Colors.blue, decoration: TextDecoration.underline),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () {
+                    launch(
+                        'https://workers-hub.enterprise.slack.com/archives/C0749M8BCKT');
+                  },
+              ),
+              TextSpan(
+                text: '下載最新的 g_record_helper.zip 檔案。',
+                style: TextStyle(color: Colors.black),
+              ),
+            ],
+          ),
         ),
         SizedBox(height: 10),
         RichText(

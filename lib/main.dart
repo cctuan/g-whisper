@@ -256,8 +256,12 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
       setState(() {
         showAllRecordings =
             false; // Reset flag when specific year/month is selected
-        selectedYear = year!;
-        selectedMonth = month!;
+        if (year != null) {
+          selectedYear = year;
+        }
+        if (month != null) {
+          selectedMonth = month;
+        }
       });
       getRecordingsByMonth(
           selectedMonth, selectedYear); // Call to get recordings by month/year
@@ -693,7 +697,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                       value: null,
                                       child: Text('All'), // Add "All" option
                                     ),
-                                    ...List.generate(2024, (index) => index + 1)
+                                    ...List.generate(DateTime.now().year - 2022,
+                                            (index) => 2023 + index)
                                         .map((int year) {
                                       return DropdownMenuItem<int>(
                                         value: year,
