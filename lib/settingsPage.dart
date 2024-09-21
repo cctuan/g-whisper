@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import './SettingService.dart';
 import './PromptItem.dart';
 import './settingSidebar.dart';
+import './inputField.dart';
+import './checkboxField.dart';
+import './dropdownField.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/gestures.dart'; // Add this line
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -50,7 +55,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void addNewPrompt() {
     setState(() {
-      prompts.add(PromptItem(name: 'New Prompt', prompt: ''));
+      prompts
+          .add(PromptItem(name: '(Please replace with new name)', prompt: ''));
     });
   }
 
@@ -206,63 +212,41 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildSttOptionsView() {
     return Center(
         child: Column(children: [
-      ListTile(
-        title: const Text("Use Local Whisper"),
-        leading: Radio<bool>(
-          value: false,
-          groupValue: useOpenAIWhisper,
-          onChanged: (bool? value) {
-            setState(() {
-              useOpenAIWhisper = value!;
-            });
-          },
-        ),
+      CheckboxField(
+        label: "Use OpenAI whisper",
+        description: "Use OpenAI Whisper for STT or Local Whisper",
+        initialValue: useOpenAIWhisper,
+        onChanged: (bool? value) {
+          setState(() {
+            useOpenAIWhisper = value!;
+          });
+        },
       ),
+      SizedBox(height: 20),
       if (!useOpenAIWhisper) ...[
-        DropdownButton<String>(
+        DropdownField(
+          label: "Local Whisper Model",
           value: localWhisperModel,
+          items: <String>['tiny', 'base', 'small', 'medium'],
           onChanged: (String? newValue) {
             setState(() {
               localWhisperModel = newValue!;
             });
           },
-          items: <String>['tiny', 'base', 'small', 'medium']
-              .map<DropdownMenuItem<String>>((String value) {
-            return DropdownMenuItem<String>(
-              value: value,
-              child: Text(value),
-            );
-          }).toList(),
         ),
       ],
-      ListTile(
-        title: const Text("Use OpenAI Whisper"),
-        leading: Radio<bool>(
-          value: true,
-          groupValue: useOpenAIWhisper,
-          onChanged: (bool? value) {
-            setState(() {
-              useOpenAIWhisper = value!;
-            });
-          },
-        ),
-      ),
       if (useOpenAIWhisper) ...[
-        TextField(
-          obscureText: true,
+        InputField(
+          label: "OpenAI API Key",
+          helperText: "Enter your OpenAI API Key here",
           controller: openAiKeyController,
-          decoration: InputDecoration(
-            labelText: 'OpenAI API Key',
-            helperText: 'Enter your OpenAI API Key here',
-          ),
+          isPassword: true,
         ),
-        TextField(
+        InputField(
+          label: "OpenAI Audio Base URL (optional)",
+          helperText: "Enter your OpenAI Audio Base URL here",
           controller: openaiAudioBaseUrlController,
-          decoration: InputDecoration(
-            labelText: 'OpenAI Audio Base URL (optional)',
-            helperText: 'Enter your OpenAI Audio Base URL here',
-          ),
-        )
+        ),
       ]
     ]));
   }
@@ -271,132 +255,104 @@ class _SettingsPageState extends State<SettingsPage> {
     return Center(
         child: Column(
       children: [
-        ListTile(
-          title: const Text("Use OpenAI LLM"),
-          leading: Radio<String>(
-            value: 'openai',
-            groupValue: llmChoice,
-            onChanged: (String? value) {
-              setState(() {
-                llmChoice = value!;
-              });
-            },
-          ),
+        CheckboxField(
+          label: "Use OpenAI LLM",
+          description: "Use OpenAI LLM for LLM",
+          initialValue: llmChoice == 'openai',
+          onChanged: (bool? value) {
+            setState(() {
+              llmChoice = value! ? 'openai' : 'ollama';
+            });
+          },
         ),
         if (llmChoice == 'openai') ...[
-          TextField(
-            obscureText: true,
+          InputField(
+            label: "OpenAI API Key",
+            helperText: "Enter your OpenAI API Key here",
             controller: openAiKeyController,
-            decoration: InputDecoration(
-              labelText: 'OpenAI API Key',
-              helperText: 'Enter your OpenAI API Key here',
-            ),
+            isPassword: true,
           ),
-          DropdownButton<String>(
+          InputField(
+            label: 'OpenAI Completion Base URL (optional)',
+            helperText: 'Enter your OpenAI Completion Base URL here',
+            controller: openaiCompletionBaseUrlController,
+          ),
+          DropdownField(
+            label: 'OpenAI Model',
             value: openAiModel,
+            items: <String>['gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini'],
             onChanged: (String? newValue) {
               setState(() {
                 openAiModel = newValue!;
               });
             },
-            items: <String>['gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini']
-                .map<DropdownMenuItem<String>>((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(value),
-              );
-            }).toList(),
-          ),
-          TextField(
-            controller: openaiCompletionBaseUrlController,
-            decoration: InputDecoration(
-              labelText: 'OpenAI Completion Base URL (optional)',
-              helperText: 'Enter your OpenAI Completion Base URL here',
-            ),
           ),
         ],
-        ListTile(
-          title: const Text("Use Ollama"),
-          leading: Radio<String>(
-            value: 'ollama',
-            groupValue: llmChoice,
-            onChanged: (String? value) {
-              setState(() {
-                llmChoice = value!;
-              });
-            },
-          ),
+        CheckboxField(
+          label: "Use Ollama",
+          description: "Use Ollama for LLM",
+          initialValue: llmChoice == 'ollama',
+          onChanged: (bool? value) {
+            setState(() {
+              llmChoice = value! ? 'ollama' : 'custom';
+            });
+          },
         ),
         if (llmChoice == 'ollama') ...[
-          TextField(
+          InputField(
+            label: 'Ollama URL',
+            helperText: 'Enter Ollama Service URL here',
             controller: ollamaUrlController,
-            decoration: InputDecoration(
-              labelText: 'Ollama URL',
-              helperText: 'Enter Ollama Service URL here',
-            ),
           ),
-          TextField(
+          InputField(
+            label: 'Ollama Model',
+            helperText: 'Enter the model identifier for Ollama',
             controller: ollamaModelController,
-            decoration: InputDecoration(
-              labelText: 'Ollama Model',
-              helperText: 'Enter the model identifier for Ollama',
-            ),
           ),
         ],
-        ListTile(
-          title: const Text("Use Custom LLM"),
-          leading: Radio<String>(
-            value: 'custom',
-            groupValue: llmChoice,
-            onChanged: (String? value) {
-              setState(() {
-                llmChoice = value!;
-              });
-            },
-          ),
+        CheckboxField(
+          label: "Use Custom LLM",
+          description: "Use Custom LLM for LLM",
+          initialValue: llmChoice == 'custom',
+          onChanged: (bool? value) {
+            setState(() {
+              llmChoice = value! ? 'custom' : 'llama_cpp';
+            });
+          },
         ),
         if (llmChoice == 'custom') ...[
-          TextField(
+          InputField(
+            label: 'Custom LLM URL',
+            helperText: 'Enter Custom LLM Service URL here',
             controller: customLlmUrlController,
-            decoration: InputDecoration(
-              labelText: 'Custom LLM URL',
-              helperText: 'Enter Custom LLM Service URL here',
-            ),
           ),
-          TextField(
+          InputField(
+            label: 'Custom LLM Model',
+            helperText: 'Enter the model identifier for Custom LLM',
             controller: customLlmModelController,
-            decoration: InputDecoration(
-              labelText: 'Custom LLM Model',
-              helperText: 'Enter the model identifier for Custom LLM',
-            ),
           ),
         ],
-        ListTile(
-          title: const Text("Run LlamaCpp"),
-          leading: Radio<String>(
-            value: 'llama_cpp',
-            groupValue: llmChoice,
-            onChanged: (String? value) {
-              setState(() {
-                llmChoice = value!;
-              });
-            },
-          ),
+        CheckboxField(
+          label: "Run LlamaCpp",
+          description: "Run LlamaCpp for LLM",
+          initialValue: llmChoice == 'llama_cpp',
+          onChanged: (bool? value) {
+            setState(() {
+              llmChoice = value! ? 'llama_cpp' : 'openai';
+            });
+          },
         ),
         if (llmChoice == 'llama_cpp') ...[
-          TextField(
+          InputField(
+            label: 'Huggingface Token',
+            helperText: 'Enter your Huggingface Token here',
             controller: huggingfaceTokenController,
-            decoration: InputDecoration(
-              labelText: 'Huggingface Token',
-              helperText: 'Enter your Huggingface Token here',
-            ),
+            isPassword: true,
           ),
-          TextField(
+          InputField(
+            label: 'Huggingface GGUF',
+            helperText: 'Enter the GGUF identifier here',
             controller: huggingfaceGgufController,
-            decoration: InputDecoration(
-              labelText: 'Huggingface GGUF',
-              helperText: 'Enter the GGUF identifier here',
-            ),
           ),
         ]
       ],
@@ -407,31 +363,22 @@ class _SettingsPageState extends State<SettingsPage> {
     return Center(
         child: Column(
       children: [
-        Text(
-          "Uncommon Nouns",
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-        TextField(
+        InputField(
           controller: whisperPromptController,
-          decoration: InputDecoration(
-            labelText: 'Uncommon Nouns',
-            helperText: 'Enter uncommon nouns here to prevent misspellings',
-          ),
+          label: 'Uncommon Nouns',
+          helperText: 'Enter uncommon nouns here to prevent misspellings',
         ),
         const SizedBox(height: 20),
-        Text(
-          "File Settings",
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-        SwitchListTile(
-          title: const Text("Preserve Original Audio File"),
-          value: storeOriginalAudio,
-          onChanged: (bool value) {
+        CheckboxField(
+          label: "Preserve Original Audio File",
+          description: "Preserve the original audio file after processing.",
+          initialValue: storeOriginalAudio,
+          onChanged: (bool? value) {
             setState(() {
-              storeOriginalAudio = value;
+              storeOriginalAudio = value!;
             });
           },
-        )
+        ),
       ],
     ));
   }
@@ -439,28 +386,42 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildWikiSettingsView() {
     return Center(
         child: Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.start, // Align children to the start
       children: [
-        TextField(
-          controller: wikiApiTokenController,
-          decoration: InputDecoration(
-            labelText: 'Wiki API Token',
-            helperText: 'Enter your Wiki API Token here',
+        Padding(
+          padding: const EdgeInsets.all(24), // Add padding
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start, // Align children to the start
+            children: [
+              const SizedBox(height: 8),
+              Text(
+                "It will help you to export the meeting notes to the wiki page automatically.",
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              InputField(
+                label: "Wiki API Token",
+                helperText: "Enter your Wiki API Token here",
+                controller: wikiApiTokenController,
+                isPassword: true,
+              ),
+              const SizedBox(height: 16), // Space between fields
+              InputField(
+                label: "Wiki Page ID",
+                controller: wikiPageIdController,
+                helperText: 'Enter the Wiki Page ID here',
+              ),
+              const SizedBox(height: 16), // Space between fields
+              InputField(
+                label: "Space ID",
+                controller: spaceIdController,
+                helperText: 'Enter the Space ID here',
+              ),
+            ],
           ),
         ),
-        TextField(
-          controller: wikiPageIdController,
-          decoration: InputDecoration(
-            labelText: 'Wiki Page ID',
-            helperText: 'Enter the Wiki Page ID here',
-          ),
-        ),
-        TextField(
-          controller: spaceIdController,
-          decoration: InputDecoration(
-            labelText: 'Space ID',
-            helperText: 'Enter the Space ID here',
-          ),
-        )
       ],
     ));
   }
@@ -482,23 +443,23 @@ class _SettingsPageState extends State<SettingsPage> {
                     icon: Icon(Icons.delete),
                     onPressed: () => removePrompt(index),
                   ),
-                  title: TextField(
+                  title: InputField(
+                    label: 'Name',
                     controller:
                         TextEditingController(text: prompts[index].name),
-                    decoration: InputDecoration(labelText: 'Name'),
                     onChanged: (value) {
                       prompts[index].name = value;
                     },
                   ),
-                  subtitle: TextField(
+                  subtitle: InputField(
+                    label: 'Prompt',
                     controller:
                         TextEditingController(text: prompts[index].prompt),
-                    decoration: InputDecoration(labelText: 'Prompt'),
                     onChanged: (value) {
                       prompts[index].prompt = value;
                     },
-                    maxLines: null,
-                    keyboardType: TextInputType.multiline,
+                    minLines: 1,
+                    // maxLines: 50,
                   ),
                   leading: Radio<int>(
                     value: index,
@@ -510,12 +471,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
-                SwitchListTile(
-                  title: Text('Enable Chapter'),
-                  value: prompts[index].enableChapter,
-                  onChanged: (bool value) {
+                CheckboxField(
+                  label: "Enable Chapter",
+                  description: "Enable Chapter for this prompt",
+                  initialValue: prompts[index].enableChapter,
+                  onChanged: (bool? value) {
                     setState(() {
-                      prompts[index].enableChapter = value;
+                      prompts[index].enableChapter = value!;
                     });
                   },
                 ),
@@ -528,7 +490,15 @@ class _SettingsPageState extends State<SettingsPage> {
           onPressed: addNewPrompt,
           child: Text('Add New Prompt'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
+            backgroundColor: const Color(0xFF0F66DE),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(5),
+            ),
+            side: BorderSide(
+              color: Colors.black.withOpacity(0.05),
+              width: 0.5,
+            ),
           ),
         )
       ],
@@ -536,7 +506,46 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildGeneralView() {
-    return Center(child: Text('General View'));
+    return Column(
+      children: [
+        Text(
+          '產品目的：\n1. 會議記錄：提供簡便的會議記錄功能。\n2. 會議小秘書：讓會議小秘書回答會議相關問題。\n3. 實驗小模型：探索使用 OpenAI 以外的模型與效果。',
+          textAlign: TextAlign.left,
+        ),
+        SizedBox(height: 10),
+        Text(
+          '環境限制：目前只有支援 Mac 與電腦的麥克風收音。',
+          textAlign: TextAlign.left,
+        ),
+        SizedBox(height: 10),
+        Text(
+          '使用教學：請於 https://workers-hub.enterprise.slack.com/archives/C0749M8BCKT 下載最新的 g_record_helper.zip 檔案。',
+          textAlign: TextAlign.left,
+        ),
+        SizedBox(height: 10),
+        RichText(
+          textAlign: TextAlign.left,
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: '更多說明請參考 ',
+                style: TextStyle(color: Colors.black),
+              ),
+              TextSpan(
+                text: 'Wiki',
+                style: TextStyle(
+                    color: Colors.blue, decoration: TextDecoration.underline),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () {
+                    launch(
+                        'https://wiki.workers-hub.com/pages/viewpage.action?spaceKey=LineTWRD&title=AI+Meeting+Noter');
+                  },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
