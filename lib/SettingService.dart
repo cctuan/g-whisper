@@ -7,6 +7,11 @@ typedef SettingChangeCallback = void Function();
 class SettingsService {
   SettingChangeCallback? onSettingChanged;
 
+  // 添加快捷键常量
+  static const String SHORTCUTS = 'shortcuts';
+  static const String TRIGGER_RECORD = 'triggerRecord';
+  static const String SCREENSHOT = 'screenshot';
+
   Future<Map<String, dynamic>> loadSettings() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     String openAiKey = prefs.getString('openai_key') ?? '';
@@ -36,6 +41,10 @@ class SettingsService {
     String wikiPageId = prefs.getString('wiki_page_id') ?? '';
     String spaceId = prefs.getString('space_id') ?? '';
 
+    // 添加快捷键设置
+    String shortcutsJson = prefs.getString(SHORTCUTS) ?? '{}';
+    Map<String, dynamic> shortcuts = json.decode(shortcutsJson);
+
     return {
       'openai_model': openAiModel,
       'openai_key': openAiKey,
@@ -57,6 +66,7 @@ class SettingsService {
       'wiki_api_token': wikiApiToken,
       'wiki_page_id': wikiPageId,
       'space_id': spaceId,
+      SHORTCUTS: shortcuts,
     };
   }
 
@@ -81,6 +91,7 @@ class SettingsService {
     String wikiApiToken,
     String wikiPageId,
     String spaceId,
+    Map<String, dynamic> shortcuts,
   ) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('openai_key', openAiKey);
@@ -108,6 +119,22 @@ class SettingsService {
     if (defaultPromptIndex != null) {
       await prefs.setInt('defaultPromptIndex', defaultPromptIndex);
     }
+    // 使用常量保存快捷键设置
+    await prefs.setString(SHORTCUTS, json.encode(shortcuts));
     onSettingChanged?.call();
+  }
+
+  // 添加一个新方法来更新快捷键设置
+  Future<void> updateShortcuts(Map<String, dynamic> shortcuts) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('SHORTCUTS', json.encode(shortcuts));
+    onSettingChanged?.call();
+  }
+
+  Future<String?> getShortcut(String key) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    String shortcutsJson = prefs.getString(SHORTCUTS) ?? '{}';
+    Map<String, dynamic> shortcuts = json.decode(shortcutsJson);
+    return shortcuts[key] as String?;
   }
 }

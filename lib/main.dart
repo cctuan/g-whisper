@@ -29,7 +29,7 @@ void main() async {
   await windowManager.ensureInitialized();
   await hotKeyManager.unregisterAll();
 
-  runApp(MyApp(title: 'G Whisper dev-0.2.1'));
+  runApp(MyApp(title: 'G Whisper dev-0.2.3'));
   // await hotKeyManager.unregisterAll();
 }
 
@@ -228,22 +228,110 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     }
   }
 
+  Future<HotKey> _setupCustomHotKey(
+      String settingKey, HotKey defaultHotKey, Function() handler) async {
+    String? shortcut = await settingsService.getShortcut(settingKey);
+    HotKey hotKey;
+
+    if (shortcut != null && shortcut.isNotEmpty) {
+      List<String> keys = shortcut.split(' + ');
+      if (keys.length == 2) {
+        try {
+          int primaryKeyId = int.parse(keys[0]);
+          int secondaryKeyId = int.parse(keys[1]);
+
+          LogicalKeyboardKey? primaryKey =
+              LogicalKeyboardKey.findKeyByKeyId(primaryKeyId);
+          LogicalKeyboardKey? secondaryKey =
+              LogicalKeyboardKey.findKeyByKeyId(secondaryKeyId);
+
+          if (primaryKey != null && secondaryKey != null) {
+            hotKey = HotKey(
+              key: secondaryKey,
+              modifiers: [_convertToHotKeyModifier(primaryKey)],
+              scope: HotKeyScope.system,
+            );
+          } else {
+            throw Exception('Invalid key found');
+          }
+        } catch (e) {
+          print('Error parsing hotkey for $settingKey: $e');
+          hotKey = defaultHotKey;
+        }
+      } else {
+        hotKey = defaultHotKey;
+      }
+    } else {
+      hotKey = defaultHotKey;
+    }
+
+    await hotKeyManager
+        .register(
+      hotKey,
+      keyDownHandler: (_) => handler(),
+    )
+        .catchError((error) {
+      print('Failed to register hotkey for $settingKey: $error');
+    });
+
+    return hotKey;
+  }
+
   void _setupHotKey() async {
     await hotKeyManager.unregisterAll();
-    _hotKey = HotKey(
+
+    _hotKey = await _setupCustomHotKey(
+      SettingsService.TRIGGER_RECORD,
+      _getDefaultHotKey(),
+      _recorderService.toggleRecording,
+    );
+  }
+
+  void _setupScreenshotHotKey() async {
+    _screenshotHotKey = await _setupCustomHotKey(
+      SettingsService.SCREENSHOT,
+      _getDefaultScreenshotHotKey(),
+      () => _screenshotService
+          .captureAndCropScreenshot(navigatorKey.currentContext!),
+    );
+  }
+
+  HotKey _getDefaultHotKey() {
+    return HotKey(
       key: PhysicalKeyboardKey.keyW,
       modifiers: [HotKeyModifier.alt],
       scope: HotKeyScope.system,
     );
+  }
 
-    hotKeyManager
-        .register(
-      _hotKey,
-      keyDownHandler: (_) => _recorderService.toggleRecording(),
-    )
-        .catchError((error) {
-      print('Failed to register hotkey: $error');
-    });
+  HotKey _getDefaultScreenshotHotKey() {
+    return HotKey(
+      key: PhysicalKeyboardKey.keyC,
+      modifiers: [HotKeyModifier.alt],
+      scope: HotKeyScope.system,
+    );
+  }
+
+  HotKeyModifier _convertToHotKeyModifier(LogicalKeyboardKey key) {
+    if (key == LogicalKeyboardKey.control ||
+        key == LogicalKeyboardKey.controlLeft ||
+        key == LogicalKeyboardKey.controlRight) {
+      return HotKeyModifier.control;
+    } else if (key == LogicalKeyboardKey.alt ||
+        key == LogicalKeyboardKey.altLeft ||
+        key == LogicalKeyboardKey.altRight) {
+      return HotKeyModifier.alt;
+    } else if (key == LogicalKeyboardKey.shift ||
+        key == LogicalKeyboardKey.shiftLeft ||
+        key == LogicalKeyboardKey.shiftRight) {
+      return HotKeyModifier.shift;
+    } else if (key == LogicalKeyboardKey.meta ||
+        key == LogicalKeyboardKey.metaLeft ||
+        key == LogicalKeyboardKey.metaRight) {
+      return HotKeyModifier.meta;
+    } else {
+      throw Exception('Unsupported modifier key');
+    }
   }
 
   void _onYearMonthSelected({int? year, int? month}) {
@@ -286,24 +374,6 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     }
   }
 
-  void _setupScreenshotHotKey() async {
-    _screenshotHotKey = HotKey(
-      key: PhysicalKeyboardKey.keyC,
-      modifiers: [HotKeyModifier.alt],
-      scope: HotKeyScope.system,
-    );
-
-    hotKeyManager
-        .register(
-      _screenshotHotKey,
-      keyDownHandler: (_) => _screenshotService
-          .captureAndCropScreenshot(navigatorKey.currentContext!),
-    )
-        .catchError((error) {
-      print('Failed to register screenshot hotkey: $error');
-    });
-  }
-
   void _unregisterScreenshotHotKey() async {
     try {
       hotKeyManager.unregister(_screenshotHotKey).catchError((error) {
@@ -335,15 +405,27 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
 
     if (currentRoute != null &&
         currentRoute.settings.name == SettingsPage.routeName) {
-      // 如果当前顶部已是 SettingsPage，则不执行任何操作
       return;
     }
 
-    // 推送 SettingsPage 到 Navigator
-    navigatorKey.currentState!.push(MaterialPageRoute(
-      builder: (context) => const SettingsPage(),
-      settings: RouteSettings(name: SettingsPage.routeName),
-    ));
+    final settingsChanged = await navigatorKey.currentState!.push<bool>(
+      MaterialPageRoute(
+        builder: (context) => SettingsPage(),
+        settings: RouteSettings(name: SettingsPage.routeName),
+      ),
+    );
+
+    if (settingsChanged == true) {
+      _reloadSettings();
+    }
+  }
+
+  void _reloadSettings() async {
+    // 重新加载设置
+    _setupHotKey();
+    _setupScreenshotHotKey();
+    // 如果有其他需要更新的设置，也在这里更新
+    setState(() {}); // 触发 UI 重建
   }
 
   Future<void> showChatPage(
@@ -577,7 +659,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                     });
                     if (details.files.isNotEmpty) {
                       String filePath = details.files.first.path;
-                      if (filePath.endsWith('.wav') ||
+                      if (filePath.endsWith('.mp4') ||
+                          filePath.endsWith('.wav') ||
                           filePath.endsWith('.mp3') ||
                           filePath.endsWith('.mov') ||
                           filePath.endsWith('.m4a')) {
@@ -829,7 +912,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                                 children: <Widget>[
                                                   ExpansionTile(
                                                     title: const Text(
-                                                      '原始音檔文字',
+                                                      '原始檔文字',
                                                       style: TextStyle(
                                                           fontSize: 18,
                                                           fontWeight:
@@ -851,7 +934,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                                         decoration:
                                                             InputDecoration(
                                                           border: InputBorder
-                                                              .none, // 无边框，根据需要选择合适的边框样式
+                                                              .none, // 边框，根据需要选择合适的边框样式
                                                         ),
                                                         maxLines: null, // 允许无限行
                                                       ),
@@ -929,40 +1012,30 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                                                           color:
                                                               Colors.black87),
                                                     ),
-                                                    subtitle: Column(
-                                                      children: <Widget>[
-                                                        Container(
-                                                          padding:
-                                                              EdgeInsets.all(
-                                                                  8.0),
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            border: Border.all(
-                                                                color: Colors
-                                                                    .grey),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        5),
-                                                          ),
-                                                          child: TextField(
-                                                            controller:
-                                                                processedTextController,
-                                                            focusNode:
-                                                                processedTextFocusNode,
-                                                            maxLines: 5,
-                                                            style: TextStyle(
-                                                                color: Colors
-                                                                    .black,
-                                                                fontSize: 16),
-                                                            decoration:
-                                                                InputDecoration
-                                                                    .collapsed(
-                                                                        hintText:
-                                                                            "Edit Processed Text"),
-                                                          ),
-                                                        ),
-                                                      ],
+                                                    subtitle: Container(
+                                                      padding:
+                                                          EdgeInsets.all(8.0),
+                                                      decoration: BoxDecoration(
+                                                        border: Border.all(
+                                                            color: Colors.grey),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(5),
+                                                      ),
+                                                      child: TextField(
+                                                        controller:
+                                                            processedTextController,
+                                                        focusNode:
+                                                            processedTextFocusNode,
+                                                        maxLines: 5,
+                                                        style: TextStyle(
+                                                            color: Colors.black,
+                                                            fontSize: 16),
+                                                        decoration: InputDecoration
+                                                            .collapsed(
+                                                                hintText:
+                                                                    "Edit Processed Text"),
+                                                      ),
                                                     ),
                                                   ),
                                                 ]),
@@ -1048,7 +1121,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                       ),
                   ]))),
           routes: {
-            SettingsPage.routeName: (context) => const SettingsPage(),
+            SettingsPage.routeName: (context) => SettingsPage(),
             ChatPage.routeName: (context) =>
                 ChatPage(recordLogs: recordLogs, initialText: ''),
           },

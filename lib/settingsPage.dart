@@ -7,16 +7,17 @@ import './checkboxField.dart';
 import './dropdownField.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/gestures.dart'; // Add this line
+import 'package:flutter/services.dart'; // 用於處理鍵盤事件
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({Key? key}) : super(key: key);
+  static const routeName = '/settings';
 
-  static const String routeName = '/settings';
   @override
   _SettingsPageState createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  bool _settingsChanged = false;
   String selectedView = 'General'; // Track the selected view
   final SettingsService settingsService = SettingsService();
   final TextEditingController openAiKeyController = TextEditingController();
@@ -46,6 +47,8 @@ class _SettingsPageState extends State<SettingsPage> {
   final TextEditingController wikiApiTokenController = TextEditingController();
   final TextEditingController wikiPageIdController = TextEditingController();
   final TextEditingController spaceIdController = TextEditingController();
+
+  Map<String, String> shortcuts = {};
 
   @override
   void initState() {
@@ -95,10 +98,12 @@ class _SettingsPageState extends State<SettingsPage> {
       wikiApiTokenController.text = settings['wiki_api_token'] ?? '';
       wikiPageIdController.text = settings['wiki_page_id'] ?? '';
       spaceIdController.text = settings['space_id'] ?? '';
+      shortcuts =
+          Map<String, String>.from(settings[SettingsService.SHORTCUTS] ?? {});
     });
   }
 
-  Future<void> saveSettings() async {
+  void _saveSettings() async {
     await settingsService.saveSettings(
       openAiKeyController.text,
       openAiModel,
@@ -120,57 +125,65 @@ class _SettingsPageState extends State<SettingsPage> {
       wikiApiTokenController.text,
       wikiPageIdController.text,
       spaceIdController.text,
+      shortcuts,
     );
-    Navigator.pop(context);
+    _settingsChanged = true;
+    Navigator.of(context).pop(_settingsChanged);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        actions: [
-          TextButton(
-            child: const Text('Save'),
-            onPressed: () {
-              if (openAiKeyController.text.isNotEmpty &&
-                  prompts.isNotEmpty &&
-                  prompts
-                      .any((p) => p.name.isNotEmpty && p.prompt.isNotEmpty) &&
-                  defaultPromptIndex != null &&
-                  prompts.length > defaultPromptIndex!) {
-                saveSettings();
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                        'Please fill in all fields, add at least one prompt with name and content, and set a default prompt.'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-      body: Row(
-        children: [
-          Sidebar(
-            onItemSelected: (String view) {
-              setState(() {
-                selectedView = view; // Update the selected view
-              });
-            },
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: _buildSelectedView(),
-              ),
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.of(context).pop(_settingsChanged);
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Settings'),
+          actions: [
+            TextButton(
+              child: const Text('Save'),
+              onPressed: () {
+                if (openAiKeyController.text.isNotEmpty &&
+                    prompts.isNotEmpty &&
+                    prompts
+                        .any((p) => p.name.isNotEmpty && p.prompt.isNotEmpty) &&
+                    defaultPromptIndex != null &&
+                    prompts.length > defaultPromptIndex!) {
+                  _saveSettings();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                          'Please fill in all fields, add at least one prompt with name and content, and set a default prompt.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
             ),
-          )
-        ],
+          ],
+        ),
+        body: Row(
+          children: [
+            Sidebar(
+              onItemSelected: (String view) {
+                setState(() {
+                  selectedView = view; // Update the selected view
+                });
+              },
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: _buildSelectedView(),
+                ),
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
@@ -204,6 +217,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return _buildWikiSettingsView();
       case 'Prompt Settings':
         return _buildPromptSettingsView();
+      case 'Shortcuts':
+        return _buildShortcutsView();
       default:
         return _buildGeneralView();
     }
@@ -505,6 +520,81 @@ class _SettingsPageState extends State<SettingsPage> {
     )));
   }
 
+  Widget _buildShortcutsView() {
+    return Center(
+      child: Column(
+        children: [
+          _buildShortcutField(SettingsService.TRIGGER_RECORD, 'Trigger Record'),
+          _buildShortcutField(SettingsService.SCREENSHOT, 'Screenshot'),
+          // 可以根據需要添加更多快捷鍵
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShortcutField(String key, String label) {
+    String _formatShortcut(String shortcut) {
+      List<String> keyIds = shortcut.split(' + ');
+      if (keyIds.length != 2) return '';
+
+      LogicalKeyboardKey? primary;
+      LogicalKeyboardKey? secondary;
+
+      try {
+        primary = LogicalKeyboardKey.findKeyByKeyId(int.parse(keyIds[0]));
+        secondary = LogicalKeyboardKey.findKeyByKeyId(int.parse(keyIds[1]));
+      } catch (e) {
+        // 如果 keyIds[0] 不是有效的數字，返回空字符串
+        return '';
+      }
+
+      if (primary == null || secondary == null) return '';
+
+      return '${primary.keyLabel} + ${secondary.keyLabel}';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label),
+          ),
+          SizedBox(width: 20),
+          Expanded(
+            child: TextFormField(
+              key: ValueKey(shortcuts[key]),
+              initialValue: shortcuts[key] != null
+                  ? _formatShortcut(shortcuts[key]!)
+                  : '',
+              decoration: InputDecoration(
+                labelText: 'Click to set',
+                hintText: 'Click to set',
+              ),
+              readOnly: true,
+              onTap: () async {
+                await showDialog<void>(
+                  context: context,
+                  builder: (BuildContext context) => _ShortcutCaptureDialog(
+                    initialShortcut: shortcuts[key] ?? '',
+                    shortcutKey: key,
+                    onSave: (key, value) {
+                      setState(() {
+                        shortcuts[key] = value;
+                      });
+                      settingsService.updateShortcuts(shortcuts);
+                    },
+                  ),
+                );
+                setState(() {});
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGeneralView() {
     return Column(
       children: [
@@ -567,6 +657,134 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ],
     );
+  }
+}
+
+class _ShortcutCaptureDialog extends StatefulWidget {
+  final String initialShortcut;
+  final String shortcutKey;
+  final Function(String, String) onSave;
+
+  const _ShortcutCaptureDialog({
+    Key? key,
+    required this.initialShortcut,
+    required this.shortcutKey,
+    required this.onSave,
+  }) : super(key: key);
+
+  @override
+  _ShortcutCaptureDialogState createState() => _ShortcutCaptureDialogState();
+}
+
+class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
+  LogicalKeyboardKey? _primaryKey;
+  LogicalKeyboardKey? _secondaryKey;
+  FocusNode _focusNode = FocusNode();
+
+  static final Set<LogicalKeyboardKey> _modifierKeys = {
+    LogicalKeyboardKey.controlLeft,
+    LogicalKeyboardKey.controlRight,
+    LogicalKeyboardKey.altLeft,
+    LogicalKeyboardKey.altRight,
+    LogicalKeyboardKey.shiftLeft,
+    LogicalKeyboardKey.shiftRight,
+    LogicalKeyboardKey.metaLeft,
+    LogicalKeyboardKey.metaRight,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.requestFocus();
+    _parseInitialShortcut();
+  }
+
+  void _parseInitialShortcut() {
+    final keys = widget.initialShortcut.split(' + ');
+    if (keys.length == 2) {
+      try {
+        _primaryKey = LogicalKeyboardKey.findKeyByKeyId(int.parse(keys[0]));
+        _secondaryKey = LogicalKeyboardKey.findKeyByKeyId(int.parse(keys[1]));
+      } catch (e) {
+        // 如果解析失敗，將兩個鍵都設置為 null
+        _primaryKey = null;
+        _secondaryKey = null;
+      }
+    } else {
+      // 如果格式不正確，將兩個鍵都設置為 null
+      _primaryKey = null;
+      _secondaryKey = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RawKeyboardListener(
+      focusNode: _focusNode,
+      onKey: (RawKeyEvent event) {
+        if (event is RawKeyDownEvent) {
+          setState(() {
+            if (_modifierKeys.contains(event.logicalKey)) {
+              _primaryKey = event.logicalKey;
+              _secondaryKey = null;
+            } else if (_primaryKey != null && _secondaryKey == null) {
+              _secondaryKey = event.logicalKey;
+            }
+          });
+        }
+      },
+      child: AlertDialog(
+        title: Text('Press desired shortcut'),
+        content: Text(_getDisplayText()),
+        actions: <Widget>[
+          TextButton(
+            child: Text('Clear'),
+            onPressed: () {
+              setState(() {
+                _primaryKey = null;
+                _secondaryKey = null;
+              });
+            },
+          ),
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          TextButton(
+            child: Text('OK'),
+            onPressed: () {
+              if (_primaryKey != null && _secondaryKey != null) {
+                widget.onSave(widget.shortcutKey, _getShortcutString());
+                Navigator.of(context).pop();
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getDisplayText() {
+    if (_primaryKey == null) {
+      return 'Press a modifier key (Ctrl, Alt, Shift, or Meta)';
+    } else if (_secondaryKey == null) {
+      return '${_primaryKey!.keyLabel} + ...';
+    } else {
+      return '${_primaryKey!.keyLabel} + ${_secondaryKey!.keyLabel}';
+    }
+  }
+
+  String _getShortcutString() {
+    if (_primaryKey == null || _secondaryKey == null) {
+      return '';
+    }
+    return '${_primaryKey!.keyId} + ${_secondaryKey!.keyId}';
   }
 }
 

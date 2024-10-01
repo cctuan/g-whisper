@@ -21,6 +21,7 @@ class _SidebarState extends State<Sidebar> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSidebarItem('General'),
+          _buildSidebarItem('Shortcuts'),
           _buildSidebarItem('STT Options'),
           _buildSidebarItem('LLM Options'),
           _buildSidebarItem('File Settings'),

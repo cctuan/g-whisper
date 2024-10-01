@@ -14,6 +14,7 @@ import './recordResult.dart';
 import './SettingService.dart';
 import './PromptItem.dart';
 import './localWhisper.dart'; // 引入 WhisperTranscriber
+import 'package:path/path.dart' as path;
 
 class AudioPart {
   File file;
@@ -270,7 +271,7 @@ class RecorderService {
       );
 
       // 删除临时文件
-      await part.file.delete();
+      // await part.file.delete();
       // Print the transcription to the console or handle it as needed.
       return transcription.text;
     } catch (e) {
@@ -283,13 +284,57 @@ class RecorderService {
       [String? whisperPrompt]) async {
     try {
       onStatusUpdateCallback?.call("Transcribing audio with whisper...");
+      Directory tempDir = await getTemporaryDirectory();
+      String tempPath = tempDir.path;
       File audioFile = File(filePath);
-      int fileSizeInBytes = await audioFile.length();
+      bool isInTempDir = path.isWithin(tempPath, filePath);
+
+      // Check if the file is already in a compatible format
+      String fileExtension = path.extension(filePath).toLowerCase();
+      bool needsConversion = !['m4a', 'mp3', 'wav'].contains(fileExtension);
+
+      String inputFilePath = filePath;
+      if (needsConversion) {
+        String m4aFilePath = "$tempPath/converted_audio.m4a";
+        String convertCommand =
+            "-i $filePath -vn -acodec aac -ar 44100 -ac 2 $m4aFilePath -y";
+
+        await FFmpegKit.execute(convertCommand).then((session) async {
+          final returnCode = await session.getReturnCode();
+          if (returnCode != null && returnCode.isValueSuccess()) {
+            print("Conversion to m4a succeeded");
+            inputFilePath = m4aFilePath;
+          } else {
+            print("Error occurred while converting audio");
+            onStatusUpdateCallback
+                ?.call("Error occurred while converting audio");
+            return "";
+          }
+        });
+      }
+
+      int fileSizeInBytes = await File(inputFilePath).length();
       double fileSizeInMB = fileSizeInBytes / (1024 * 1024);
-      int numberOfParts = (fileSizeInMB / 10).ceil();
-      // 切割檔案
+
+      // If file is smaller than 25MB, we can send it directly to Whisper API
+      if (fileSizeInMB <= 25) {
+        String transcriptionSingleText = await callWhisperApi(
+            AudioPart(File(inputFilePath), 0), whisperPrompt ?? '');
+        if (settings?['store_original_audio'] == false &&
+            isProcessing == true &&
+            isInTempDir) {
+          await audioFile.delete();
+          print("Temporary audio file deleted: $filePath");
+        } else {
+          print("Audio file not deleted: $filePath");
+        }
+        return transcriptionSingleText;
+      }
+
+      // For larger files, we still need to split
+      int numberOfParts = (fileSizeInMB / 25).ceil();
       List<AudioPart> files =
-          await splitAudioFile(filePath, numberOfParts); // 2 MB
+          await splitAudioFile(inputFilePath, numberOfParts);
 
       List<String> transcriptions = [];
       List<Future<String>> transcriptionFutures = files.map((part) async {
@@ -319,8 +364,13 @@ class RecorderService {
       }
 
       // 删除临时文件
-      if (settings?['store_original_audio'] == false && isProcessing == true) {
+      if (settings?['store_original_audio'] == false &&
+          isProcessing == true &&
+          isInTempDir) {
         await audioFile.delete();
+        print("Temporary audio file deleted: $filePath");
+      } else {
+        print("Audio file not deleted: $filePath");
       }
 
       // 合併文本
@@ -442,38 +492,14 @@ class RecorderService {
     Directory tempDir = await getTemporaryDirectory();
     String tempPath = tempDir.path;
 
-    // Check the file extension and convert if necessary
-    String inputFilePath = filePath;
-    String m4aFilePath = "$tempPath/converted_audio.m4a";
-    String convertCommand =
-        "-i $filePath -vn -acodec aac -ar 44100 -ac 2 $m4aFilePath -y";
-
-    await FFmpegKit.execute(convertCommand).then((session) async {
-      final returnCode = await session.getReturnCode();
-      if (returnCode != null && returnCode.isValueSuccess()) {
-        print("Conversion to m4a succeeded");
-        inputFilePath = m4aFilePath;
-      } else if (returnCode != null && returnCode.isValueError()) {
-        print("Error occurred while converting mov to m4a");
-        onStatusUpdateCallback
-            ?.call("Error occurred while converting mov to m4a");
-        return parts; // Return an empty list if conversion fails
-      } else {
-        print("FFmpeg process did not return a valid status for conversion");
-        onStatusUpdateCallback?.call(
-            "FFmpeg process did not return a valid status for conversion");
-        return parts; // Return an empty list if conversion fails
-      }
-    });
-
     // Calculate the duration of each part
-    double duration = await getDuration(inputFilePath);
+    double duration = await getDuration(filePath);
     print('Duration: $duration');
 
     double partDuration = duration / numberOfParts;
     if (partDuration <= 1) {
       // Check if the duration calculation is correct
-      parts.add(AudioPart(File(inputFilePath),
+      parts.add(AudioPart(File(filePath),
           0)); // Entire file as one part if duration calculation is too small
       return parts;
     }
@@ -485,7 +511,7 @@ class RecorderService {
       double startTime = partDuration * i;
       String outputFileName = "$tempPath/output_part_$i.m4a";
       String command =
-          "-i $inputFilePath -ss $startTime -t $partDuration -c copy $outputFileName -y";
+          "-i $filePath -ss $startTime -t $partDuration -c copy $outputFileName -y";
 
       await FFmpegKit.execute(command).then((session) async {
         final returnCode = await session.getReturnCode();
