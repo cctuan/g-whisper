@@ -12,12 +12,13 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.x' # Specify the Flutter version you are using
           channel: 'stable'  # or 'beta' or 'dev'
+          architecture: 'arm64'
 
       - name: Install dependencies
         run: flutter pub get
@@ -29,7 +30,7 @@ jobs:
         run: flutter build macos
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: mac-build-${{ github.run_number }}
           path: build/macos/Build/Products/Release/*.app

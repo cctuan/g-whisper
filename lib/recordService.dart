@@ -179,7 +179,12 @@ class RecorderService {
       String path = '${dir!.path}/record_$formattedDate.m4a';
       screenshots.clear(); // Clear previous screenshots
       await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.wav),
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          sampleRate: 16000,
+          bitRate: 22050,
+          numChannels: 1,
+        ),
         path: path,
       );
       _isRecording = true;
