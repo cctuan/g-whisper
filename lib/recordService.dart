@@ -296,7 +296,7 @@ class RecorderService {
 
       // Check if the file is already in a compatible format
       String fileExtension = path.extension(filePath).toLowerCase();
-      bool needsConversion = !['m4a', 'mp3', 'wav'].contains(fileExtension);
+      bool needsConversion = !['.m4a', '.mp3', '.wav'].contains(fileExtension);
 
       String inputFilePath = filePath;
       if (needsConversion) {
@@ -337,7 +337,7 @@ class RecorderService {
       }
 
       // For larger files, we still need to split
-      int numberOfParts = (fileSizeInMB / 25).ceil();
+      int numberOfParts = (fileSizeInMB / 5).ceil();
       List<AudioPart> files =
           await splitAudioFile(inputFilePath, numberOfParts);
 

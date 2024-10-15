@@ -29,7 +29,7 @@ void main() async {
   await windowManager.ensureInitialized();
   await hotKeyManager.unregisterAll();
 
-  runApp(MyApp(title: 'G Whisper dev-0.2.3'));
+  runApp(MyApp(title: 'G Whisper dev-0.2.4'));
   // await hotKeyManager.unregisterAll();
 }
 
@@ -89,7 +89,8 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     _wikiService = WikiService(settingsService);
     // await _wikiService.initialize();
     await _loadCurrentMonthRecordings();
-    filteredRecordLogs = recordLogs.asMap().entries.toList();
+    // filteredRecordLogs = recordLogs.asMap().entries.toList();
+    _filterRecords();
     _recorderService = RecorderService();
     _recorderService.onRecordingStateChanged = () {
       setState(() {
@@ -110,7 +111,7 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
     _recorderService.onRecordCompleteReturn =
         (RecordResult result, [int? id]) async {
       // 在这里处理录音完成后的逻辑
-      // 在插入新录音记录之前，先将用户的视图切换到最新的 year 和 month
+      // 在插入新录音记录之前，先��用户的视图切换到最新的 year 和 month
       _onYearMonthSelected(
           year: DateTime.now().year, month: DateTime.now().month);
 
@@ -544,6 +545,9 @@ class _MyHomePageState extends State<MyApp> with TrayListener {
                 entry.value.processedText.contains(searchKeyword))
             .toList();
       }
+      // Sort the filtered records by timestamp in descending order (newest first)
+      filteredRecordLogs
+          .sort((a, b) => b.value.timestamp.compareTo(a.value.timestamp));
     });
   }
 
