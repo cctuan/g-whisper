@@ -66,13 +66,18 @@ class ConversationalQA {
       final text = recordLogs.first.originalText;
       documents = textSplitter.createDocuments(textSplitter.splitText(text));
     } else {
-      documents = recordLogs
-          .where((log) => log.processedText.isNotEmpty)
-          .map((log) => Document(
-                pageContent: log.processedText,
-                metadata: {'id': log.id, 'timestamp': log.timestamp},
-              ))
-          .toList();
+      const textSplitter = CharacterTextSplitter(
+        chunkSize: 3000,
+        chunkOverlap: 200,
+      );
+      documents =
+          recordLogs.where((log) => log.processedText.isNotEmpty).expand((log) {
+        final splitTexts = textSplitter.splitText(log.processedText);
+        return splitTexts.map((splitText) => Document(
+              pageContent: splitText,
+              metadata: {'id': log.id, 'timestamp': log.timestamp},
+            ));
+      }).toList();
     }
 
     final docSearch = await MemoryVectorStore.fromDocuments(

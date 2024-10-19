@@ -68,29 +68,65 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   final SettingsService settingsService = SettingsService();
+  late Map<String, dynamic> settings;
   final List<types.Message> _messages = [];
   final types.User _ai = const types.User(id: 'ai-id');
   final types.User _user = const types.User(id: 'user-id');
   late ConversationalQA conversationalQA;
   bool _isLoading = true;
+  List<RecordResult> selectedRecordLogs = [];
 
   @override
   void initState() {
     super.initState();
-    loadSettings();
-    _loadMessages();
+    _initializeSettings();
   }
 
-  Future<void> loadSettings() async {
-    var settings = await settingsService.loadSettings();
-    conversationalQA = ConversationalQA(
-      settings: settings,
-      recordLogs: widget.recordLogs,
-    );
-    await conversationalQA.init();
+  Future<void> _initializeSettings() async {
+    settings = await settingsService.loadSettings();
+    await _initializeConversationalQA();
+    // _loadMessages();
     setState(() {
       _isLoading = false;
     });
+  }
+
+  Future<void> _initializeConversationalQA() async {
+    conversationalQA = ConversationalQA(
+      settings: settings,
+      recordLogs: selectedRecordLogs,
+    );
+    await conversationalQA.init();
+
+    // Clear existing messages
+    setState(() {
+      _messages.clear();
+    });
+
+    // Add initial message based on selectedRecordLogs
+    if (selectedRecordLogs.isEmpty) {
+      _addMessage(types.TextMessage(
+        author: _ai,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        id: Random().nextInt(100000).toString(),
+        text:
+            "Please select records from the left panel and press 'Save Selection' to start the chat.",
+      ));
+    } else {
+      String selectedLogsPreview = selectedRecordLogs.map((log) {
+        String previewText =
+            log.processedText.substring(0, min(50, log.processedText.length));
+        return "${log.timestamp}\n$previewText";
+      }).join('\n\n');
+
+      _addMessage(types.TextMessage(
+        author: _ai,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        id: Random().nextInt(100000).toString(),
+        text:
+            "Chat will use the selected logs as knowledge base. Here's a preview of the selected logs:\n\n$selectedLogsPreview",
+      ));
+    }
   }
 
   void _loadMessages() {
@@ -147,27 +183,217 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Future<void> _updateSelectedRecordLogs(List<RecordResult> logs) async {
+    setState(() {
+      _isLoading = true;
+      selectedRecordLogs = logs;
+    });
+    await _initializeConversationalQA();
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chat'),
       ),
-      body: _isLoading
-          ? Center(
-              child:
-                  CircularProgressIndicator()) // Show a loading spinner while initializing
-          : Chat(
-              messages: _messages,
-              onSendPressed: _handleSendPressed,
-              user: _user,
-              customMessageBuilder: (types.CustomMessage customMessage,
-                  {required int messageWidth}) {
-                return ExpandableText(
-                  text: customMessage.metadata?['pageContent'],
-                );
-              },
+      body: Row(
+        children: [
+          Expanded(
+            flex: 1,
+            child: RecordLogsSelector(
+              recordLogs: widget.recordLogs,
+              onSave: _updateSelectedRecordLogs,
             ),
+          ),
+          Expanded(
+            flex: 2,
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator())
+                : Chat(
+                    messages: _messages,
+                    onSendPressed: _handleSendPressed,
+                    user: _user,
+                    customMessageBuilder: (types.CustomMessage customMessage,
+                        {required int messageWidth}) {
+                      return ExpandableText(
+                        text: customMessage.metadata?['pageContent'],
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RecordLogsSelector extends StatefulWidget {
+  final List<RecordResult> recordLogs;
+  final Function(List<RecordResult>) onSave;
+
+  const RecordLogsSelector({
+    Key? key,
+    required this.recordLogs,
+    required this.onSave,
+  }) : super(key: key);
+
+  @override
+  _RecordLogsSelectorState createState() => _RecordLogsSelectorState();
+}
+
+class _RecordLogsSelectorState extends State<RecordLogsSelector> {
+  List<RecordResult> selectedLogs = [];
+  String searchQuery = '';
+
+  String getContextAroundMatch(String fullText, String query) {
+    // Remove whitespace and newlines
+    fullText = fullText.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    if (query.isEmpty) {
+      return fullText.length > 50
+          ? fullText.substring(0, 50) + '...'
+          : fullText;
+    }
+
+    int matchIndex = fullText.toLowerCase().indexOf(query.toLowerCase());
+    if (matchIndex == -1) {
+      return fullText.length > 50
+          ? fullText.substring(0, 50) + '...'
+          : fullText;
+    }
+
+    int contextLength = 50;
+    int queryLength = query.length;
+    int remainingContext = contextLength - queryLength;
+    int leftContext = remainingContext ~/ 2;
+    int rightContext = remainingContext - leftContext;
+
+    int startIndex = (matchIndex - leftContext).clamp(0, fullText.length);
+    int endIndex =
+        (matchIndex + queryLength + rightContext).clamp(0, fullText.length);
+
+    // Adjust start and end to ensure we have at least 50 characters
+    if (endIndex - startIndex < contextLength) {
+      if (startIndex == 0) {
+        endIndex = min(fullText.length, contextLength);
+      } else if (endIndex == fullText.length) {
+        startIndex = max(0, fullText.length - contextLength);
+      }
+    }
+
+    String result = fullText.substring(startIndex, endIndex);
+
+    // Add ellipsis if necessary
+    if (startIndex > 0) result = '...' + result;
+    if (endIndex < fullText.length) result = result + '...';
+
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    List<RecordResult> filteredLogs = widget.recordLogs
+        .where((log) =>
+            log.originalText
+                .toLowerCase()
+                .contains(searchQuery.toLowerCase()) ||
+            log.processedText.toLowerCase().contains(searchQuery.toLowerCase()))
+        .toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: TextField(
+            decoration: InputDecoration(
+              labelText: 'Search RecordLogs',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (value) {
+              setState(() {
+                searchQuery = value;
+              });
+            },
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: filteredLogs.length,
+            itemBuilder: (context, index) {
+              final log = filteredLogs[index];
+              String displayText;
+              if (log.processedText
+                  .toLowerCase()
+                  .contains(searchQuery.toLowerCase())) {
+                displayText =
+                    getContextAroundMatch(log.processedText, searchQuery);
+              } else {
+                displayText =
+                    getContextAroundMatch(log.originalText, searchQuery);
+              }
+              return ExpansionTile(
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      log.timestamp,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      displayText,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Detail'),
+                    Icon(Icons.arrow_drop_down),
+                  ],
+                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      log.processedText
+                          .substring(0, min(500, log.processedText.length)),
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+                leading: Checkbox(
+                  value: selectedLogs.contains(log),
+                  onChanged: (bool? value) {
+                    setState(() {
+                      if (value == true) {
+                        selectedLogs.add(log);
+                      } else {
+                        selectedLogs.remove(log);
+                      }
+                    });
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            widget.onSave(selectedLogs);
+          },
+          child: Text('Save Selection'),
+        ),
+      ],
     );
   }
 }
